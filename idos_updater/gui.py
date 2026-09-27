@@ -1,7 +1,7 @@
 """
 Grafické rozhraní (GUI) pro IDOS Updater v knihovně Tkinter.
 Umožňuje pohodlný výběr balíčků, přednastavené sady (presety), vyhledávání,
-automatickou detekci instalace, zálohování a sledování průběhu stahování v reálném čase.
+inteligentní detekci zastaralých balíčků, zálohování a sledování průběhu stahování v reálném čase.
 """
 
 import os
@@ -9,7 +9,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set, Optional, Tuple
 
 from idos_updater.core import (
     ChapsScraper,
@@ -26,8 +26,8 @@ class IdosUpdaterGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("IDOS Aktualizátor (CHAPS)")
-        self.geometry("980x720")
-        self.minsize(800, 600)
+        self.geometry("1020x740")
+        self.minsize(850, 620)
 
         # Načtení konfigurace
         self.config_mgr = ConfigManager()
@@ -35,6 +35,7 @@ class IdosUpdaterGUI(tk.Tk):
 
         # Stavové proměnné
         self.items: List[UpdateItem] = []
+        self.local_files_map: Dict[str, Tuple[str, object]] = {}
         self.selected_filenames: Set[str] = set()
         self.is_updating = False
         self.cancel_requested = False
@@ -45,7 +46,7 @@ class IdosUpdaterGUI(tk.Tk):
         # Vytvoření uživatelského rozhraní
         self._create_widgets()
 
-        # Inicializace cest a kontrola
+        # Inicializace cest, skenování a kontrola
         self._refresh_path_status()
         self._check_process_status()
 
@@ -83,7 +84,7 @@ class IdosUpdaterGUI(tk.Tk):
         self.path_var = tk.StringVar(value=self.config.get("idos_path", r"C:\IDOS"))
         self.path_entry = ttk.Entry(path_top_row, textvariable=self.path_var, width=50)
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        self.path_entry.bind("<KeyRelease>", lambda e: self._refresh_path_status())
+        self.path_entry.bind("<KeyRelease>", lambda e: self._on_path_changed())
 
         ttk.Button(path_top_row, text="Procházet...", command=self._browse_path).pack(side=tk.LEFT, padx=(0, 4))
         ttk.Button(path_top_row, text="Autodetekce", command=self._autodetect_path).pack(side=tk.LEFT, padx=(0, 4))
@@ -110,6 +111,8 @@ class IdosUpdaterGUI(tk.Tk):
         preset_btn_frame = ttk.Frame(preset_group)
         preset_btn_frame.pack(fill=tk.X)
 
+        ttk.Button(preset_btn_frame, text="⚡ Označit vyžadující aktualizaci", style="Preset.TButton",
+                   command=self._select_outdated_only).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_btn_frame, text="⚡ Rychlá (Program + Vlaky + Busy)", style="Preset.TButton",
                    command=lambda: self._apply_preset("quick")).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_btn_frame, text="📦 Kompletní (KOMPLET + Program)", style="Preset.TButton",
@@ -125,21 +128,33 @@ class IdosUpdaterGUI(tk.Tk):
         list_group = ttk.LabelFrame(main_frame, text=" 📦 Dostupné balíčky z CHAPS ", padding="6")
         list_group.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
 
-        # Filter řádek
+        # Filter řádek 1
         filter_row = ttk.Frame(list_group)
         filter_row.pack(fill=tk.X, pady=(0, 6))
 
-        ttk.Label(filter_row, text="🔍 Filtr / Hledat:").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(filter_row, text="🔍 Filtr:").pack(side=tk.LEFT, padx=(0, 4))
         self.search_var = tk.StringVar()
-        self.search_entry = ttk.Entry(filter_row, textvariable=self.search_var, width=30)
+        self.search_entry = ttk.Entry(filter_row, textvariable=self.search_var, width=22)
         self.search_entry.pack(side=tk.LEFT, padx=(0, 8))
         self.search_entry.bind("<KeyRelease>", lambda e: self._filter_tree())
 
-        ttk.Label(filter_row, text="Kategorie:").pack(side=tk.LEFT, padx=(8, 4))
+        ttk.Label(filter_row, text="Kategorie:").pack(side=tk.LEFT, padx=(6, 4))
         self.category_var = tk.StringVar(value="Všechny")
-        self.category_combo = ttk.Combobox(filter_row, textvariable=self.category_var, state="readonly", width=25)
+        self.category_combo = ttk.Combobox(filter_row, textvariable=self.category_var, state="readonly", width=22)
         self.category_combo.pack(side=tk.LEFT, padx=(0, 8))
         self.category_combo.bind("<<ComboboxSelected>>", lambda e: self._filter_tree())
+
+        ttk.Label(filter_row, text="Stav:").pack(side=tk.LEFT, padx=(6, 4))
+        self.status_filter_var = tk.StringVar(value="Všechny stavy")
+        self.status_combo = ttk.Combobox(
+            filter_row,
+            textvariable=self.status_filter_var,
+            state="readonly",
+            values=["Všechny stavy", "🟠 Pouze vyžadující aktualizaci", "🟢 Pouze aktuální", "⚪ Pouze nenainstalované", "🟠+⚪ Zastaralé nebo chybějící"],
+            width=28
+        )
+        self.status_combo.pack(side=tk.LEFT, padx=(0, 8))
+        self.status_combo.bind("<<ComboboxSelected>>", lambda e: self._filter_tree())
 
         ttk.Button(filter_row, text="🔄 Obnovit z webu", command=self.refresh_updates_list).pack(side=tk.RIGHT, padx=(4, 0))
         ttk.Button(filter_row, text="Označit zobrazené", command=self._select_all_visible).pack(side=tk.RIGHT, padx=(4, 0))
@@ -148,22 +163,24 @@ class IdosUpdaterGUI(tk.Tk):
         tree_frame = ttk.Frame(list_group)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("selected", "filename", "category", "date", "size", "description")
+        columns = ("selected", "status", "filename", "category", "date", "size", "description")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
 
         self.tree.heading("selected", text="✓", anchor=tk.CENTER)
+        self.tree.heading("status", text="Stav verze", anchor=tk.W)
         self.tree.heading("filename", text="Soubor", anchor=tk.W)
         self.tree.heading("category", text="Kategorie", anchor=tk.W)
-        self.tree.heading("date", text="Datum", anchor=tk.CENTER)
+        self.tree.heading("date", text="Datum na webu", anchor=tk.CENTER)
         self.tree.heading("size", text="Velikost", anchor=tk.E)
         self.tree.heading("description", text="Popis / Obsah", anchor=tk.W)
 
-        self.tree.column("selected", width=40, anchor=tk.CENTER, stretch=False)
-        self.tree.column("filename", width=120, anchor=tk.W, stretch=False)
-        self.tree.column("category", width=190, anchor=tk.W, stretch=False)
-        self.tree.column("date", width=95, anchor=tk.CENTER, stretch=False)
-        self.tree.column("size", width=105, anchor=tk.E, stretch=False)
-        self.tree.column("description", width=350, anchor=tk.W, stretch=True)
+        self.tree.column("selected", width=35, anchor=tk.CENTER, stretch=False)
+        self.tree.column("status", width=145, anchor=tk.W, stretch=False)
+        self.tree.column("filename", width=115, anchor=tk.W, stretch=False)
+        self.tree.column("category", width=175, anchor=tk.W, stretch=False)
+        self.tree.column("date", width=100, anchor=tk.CENTER, stretch=False)
+        self.tree.column("size", width=95, anchor=tk.E, stretch=False)
+        self.tree.column("description", width=340, anchor=tk.W, stretch=True)
 
         # Posuvníky
         tree_scroll_y = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -246,8 +263,7 @@ class IdosUpdaterGUI(tk.Tk):
         selected = filedialog.askdirectory(initialdir=self.path_var.get() or r"C:\IDOS", title="Vyberte složku IDOS")
         if selected:
             self.path_var.set(os.path.normpath(selected))
-            self._refresh_path_status()
-            self._save_settings()
+            self._on_path_changed()
 
     def _autodetect_path(self):
         detected = IdosEnvironment.find_default_path()
@@ -257,8 +273,17 @@ class IdosUpdaterGUI(tk.Tk):
         else:
             self.log("Autodetekce: IDOS nebyl nalezen v běžných umístěních, nastaveno na C:\\IDOS")
             self.path_var.set(r"C:\IDOS")
+        self._on_path_changed()
+
+    def _on_path_changed(self):
         self._refresh_path_status()
+        self._rescan_local_files()
         self._save_settings()
+        self._filter_tree()
+
+    def _rescan_local_files(self):
+        path = self.path_var.get().strip()
+        self.local_files_map = IdosEnvironment.scan_local_files(path)
 
     def _refresh_path_status(self):
         path = self.path_var.get().strip()
@@ -330,13 +355,21 @@ class IdosUpdaterGUI(tk.Tk):
         self.items = items
         self.log(f"Úspěšně načteno {len(items)} balíčků z CHAPS.")
 
+        # Skenování lokálních souborů
+        self._rescan_local_files()
+
         categories = ["Všechny"] + sorted(list(set(it.category_label for it in items)))
         self.category_combo["values"] = categories
         if self.category_var.get() not in categories:
             self.category_var.set("Všechny")
 
+        # Pokud ještě není vybráno, zkusíme označit zastaralé, nebo quick preset
         if not self.selected_filenames:
-            self._apply_preset("quick")
+            outdated_count = sum(1 for it in self.items if IdosEnvironment.get_item_update_status(it, self.local_files_map)[0] == "outdated")
+            if outdated_count > 0:
+                self._select_outdated_only()
+            else:
+                self._apply_preset("quick")
         else:
             self._filter_tree()
 
@@ -357,13 +390,28 @@ class IdosUpdaterGUI(tk.Tk):
         self.log(f"Aplikována předvolba: {preset['name']}")
         self._filter_tree()
 
+    def _select_outdated_only(self):
+        """Označí pouze balíčky, u kterých byla detekována novější verze na webu CHAPS."""
+        self.selected_filenames.clear()
+        outdated_count = 0
+        for it in self.items:
+            status_code, _, _ = IdosEnvironment.get_item_update_status(it, self.local_files_map)
+            if status_code == "outdated":
+                self.selected_filenames.add(it.filename)
+                outdated_count += 1
+
+        self.log(f"Označeno {outdated_count} balíčků vyžadujících aktualizaci.")
+        if outdated_count == 0:
+            self.log("Všechny nainstalované balíčky jsou již aktuální.")
+        self._filter_tree()
+
     def _clear_selection(self):
         self.selected_filenames.clear()
         self._filter_tree()
 
     def _select_all_visible(self):
         for child in self.tree.get_children():
-            fn = self.tree.item(child, "values")[1]
+            fn = self.tree.item(child, "values")[2]
             self.selected_filenames.add(fn)
         self._filter_tree()
 
@@ -382,7 +430,7 @@ class IdosUpdaterGUI(tk.Tk):
         values = list(self.tree.item(item_id, "values"))
         if not values:
             return
-        filename = values[1]
+        filename = values[2]
         if filename in self.selected_filenames:
             self.selected_filenames.remove(filename)
             values[0] = " "
@@ -395,17 +443,36 @@ class IdosUpdaterGUI(tk.Tk):
     def _filter_tree(self):
         query = self.search_var.get().strip().lower()
         cat_filter = self.category_var.get()
+        status_filter = self.status_filter_var.get()
 
         for row in self.tree.get_children():
             self.tree.delete(row)
 
         visible_count = 0
+        outdated_total = 0
         for it in self.items:
+            # Zjištění stavu balíčku
+            status_code, status_label, _ = IdosEnvironment.get_item_update_status(it, self.local_files_map)
+            if status_code == "outdated":
+                outdated_total += 1
+
+            # Filtr podle stavu
+            if status_filter == "🟠 Pouze vyžadující aktualizaci" and status_code != "outdated":
+                continue
+            elif status_filter == "🟢 Pouze aktuální" and status_code != "up_to_date":
+                continue
+            elif status_filter == "⚪ Pouze nenainstalované" and status_code != "not_installed":
+                continue
+            elif status_filter == "🟠+⚪ Zastaralé nebo chybějící" and status_code not in ("outdated", "not_installed"):
+                continue
+
+            # Filtr podle kategorie
             if cat_filter != "Všechny" and it.category_label != cat_filter:
                 continue
 
+            # Filtr podle hledaného textu
             if query:
-                full_text = f"{it.filename} {it.title} {it.description} {it.category_label}".lower()
+                full_text = f"{it.filename} {it.title} {it.description} {it.category_label} {status_label}".lower()
                 if query not in full_text:
                     continue
 
@@ -414,6 +481,7 @@ class IdosUpdaterGUI(tk.Tk):
 
             self.tree.insert("", tk.END, values=(
                 sel_str,
+                status_label,
                 it.filename,
                 it.category_label,
                 it.date,
@@ -422,15 +490,20 @@ class IdosUpdaterGUI(tk.Tk):
             ))
             visible_count += 1
 
-        self._update_selection_summary()
+        self._update_selection_summary(outdated_total)
 
-    def _update_selection_summary(self):
+    def _update_selection_summary(self, outdated_total: Optional[int] = None):
         sel_items = [it for it in self.items if it.filename in self.selected_filenames]
         total_size = sum(it.size_bytes for it in sel_items)
         size_mb = total_size / (1024 * 1024)
 
+        if outdated_total is None:
+            outdated_total = sum(1 for it in self.items if IdosEnvironment.get_item_update_status(it, self.local_files_map)[0] == "outdated")
+
+        status_suffix = f"  |  🟠 K aktualizaci: {outdated_total}" if outdated_total > 0 else "  |  🟢 Vše nainstalované je aktuální"
+
         self.selection_info_label.config(
-            text=f"Vybráno: {len(sel_items)} z {len(self.items)} balíčků  |  Celková velikost: {size_mb:.2f} MB"
+            text=f"Vybráno: {len(sel_items)} z {len(self.items)} balíčků  |  Velikost: {size_mb:.2f} MB{status_suffix}"
         )
 
     def start_update(self):
@@ -517,6 +590,8 @@ class IdosUpdaterGUI(tk.Tk):
             self.progress_bar["value"] = 100
             self.progress_label.config(text="Aktualizace úspěšně dokončena.")
             self._refresh_path_status()
+            self._rescan_local_files()
+            self._filter_tree()
 
             self.log("=" * 55)
             if err_cnt == 0:

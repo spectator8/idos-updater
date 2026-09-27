@@ -1,7 +1,7 @@
 """
 Jádro aplikace IDOS Updater.
 Obsahuje třídy pro stahování seznamu aktualizací z chaps.cz,
-správu prostředí IDOS, zálohování, stahování archivů a jejich extrakci.
+správu prostředí IDOS, porovnávání verzí/dat souborů, zálohování, stahování archivů a jejich extrakci.
 """
 
 import os
@@ -15,13 +15,23 @@ import urllib.request
 import urllib.error
 import html
 import re
+import datetime
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional, Callable, Tuple
+from typing import List, Dict, Optional, Callable, Tuple, Set
 from pathlib import Path
 
 
 CHAPS_URL = "https://www.chaps.cz/cs/download/idos"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 IDOSUpdater/1.0"
+
+
+def parse_date(date_str: str) -> datetime.date:
+    """Převede textové datum (např. '25.9.2026') na objekt datetime.date."""
+    try:
+        parts = [int(p) for p in date_str.strip().split('.')]
+        return datetime.date(parts[2], parts[1], parts[0])
+    except Exception:
+        return datetime.date(1970, 1, 1)
 
 
 @dataclass
@@ -49,6 +59,36 @@ class UpdateItem:
     @property
     def is_komplet(self) -> bool:
         return self.filename.upper() == "KOMPLET.ZIP"
+
+    @property
+    def parsed_date(self) -> datetime.date:
+        return parse_date(self.date)
+
+    def get_target_filenames(self) -> List[str]:
+        """Vrátí seznam názvů souborů, které tento balíček instaluje/aktualizuje."""
+        targets = []
+        fn_upper = self.filename.upper()
+        if fn_upper in ("TTAKT.ZIP", "TTOLD.ZIP"):
+            return ["tt.exe", "tt.dll", "ttc.dll"]
+        if fn_upper == "TTFONT.ZIP":
+            return ["tt.ttf"]
+        if fn_upper == "KOMPLET.ZIP":
+            return ["vlak26e.tt", "bus26c.tt", "vlak26c.tt"]
+
+        # Hledání názvů souborů z popisu (např. Aktualizuje soubor Vlak26E.tt)
+        found = re.findall(r'([A-Za-z0-9_]+\.(?:tt|exe|dll|ttf|map|tar|ttr|prt|chm))', self.description, re.IGNORECASE)
+        for f in found:
+            targets.append(f.lower())
+
+        # Základní název balíčku s různými příponami
+        base = self.filename.rsplit('.', 1)[0].lower()
+        targets.append(f"{base}.tt")
+        targets.append(f"{base}.tar")
+        targets.append(f"{base}.map")
+        targets.append(f"{base}.ttr")
+
+        # Odstranění duplicit se zachováním pořadí
+        return list(dict.fromkeys(targets))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -182,7 +222,7 @@ class ChapsScraper:
 
 
 class IdosEnvironment:
-    """Poskytuje informace o lokální instalaci IDOS a procesech."""
+    """Poskytuje informace o lokální instalaci IDOS, detekci verzí a procesech."""
 
     POSSIBLE_PATHS = [
         r"C:\IDOS",
@@ -201,6 +241,63 @@ class IdosEnvironment:
                 if os.path.isfile(os.path.join(path, "TT.exe")) or os.path.isdir(os.path.join(path, "Data1")):
                     return os.path.abspath(path)
         return None
+
+    @classmethod
+    def scan_local_files(cls, idos_path: str) -> Dict[str, Tuple[str, datetime.date]]:
+        """
+        Prohledá složku IDOS a vrátí mapu:
+        { 'vlak26e.tt': (plná_cesta, datum_poslední_úpravy), ... }
+        """
+        files_map: Dict[str, Tuple[str, datetime.date]] = {}
+        if not idos_path or not os.path.isdir(idos_path):
+            return files_map
+
+        try:
+            for root, _, filenames in os.walk(idos_path):
+                # Ignorujeme zálohy
+                if "_backups" in root or "backups" in root:
+                    continue
+                for fn in filenames:
+                    full_p = os.path.join(root, fn)
+                    try:
+                        mtime = os.path.getmtime(full_p)
+                        dt = datetime.date.fromtimestamp(mtime)
+                        files_map[fn.lower()] = (full_p, dt)
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Chyba při skenování lokálních souborů: {e}")
+
+        return files_map
+
+    @classmethod
+    def get_item_update_status(cls, item: UpdateItem, local_files_map: Dict[str, Tuple[str, datetime.date]]) -> Tuple[str, str, Optional[str]]:
+        """
+        Vrátí stav balíčku:
+        - ('outdated', '🟠 Vyžaduje aktualizaci', '20.9.2025')
+        - ('up_to_date', '🟢 Aktuální', '25.9.2026')
+        - ('not_installed', '⚪ Nenainstalováno', None)
+        """
+        targets = item.get_target_filenames()
+        item_date = item.parsed_date
+
+        found_dates = []
+        for tgt in targets:
+            if tgt in local_files_map:
+                _, local_dt = local_files_map[tgt]
+                found_dates.append(local_dt)
+
+        if not found_dates:
+            return ("not_installed", "⚪ Nenainstalováno", None)
+
+        # Nejnovější datum nalezeného lokálního souboru
+        latest_local_dt = max(found_dates)
+        local_date_str = f"{latest_local_dt.day}.{latest_local_dt.month}.{latest_local_dt.year}"
+
+        if item_date > latest_local_dt:
+            return ("outdated", "🟠 Vyžaduje aktualizaci", local_date_str)
+        else:
+            return ("up_to_date", "🟢 Aktuální", local_date_str)
 
     @classmethod
     def is_idos_running(cls) -> bool:
@@ -301,7 +398,6 @@ class BackupManager:
         try:
             with zipfile.ZipFile(backup_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(idos_path):
-                    # Přeskočíme složku se zálohami, abychom nezálohovali zálohy
                     if os.path.abspath(root).startswith(os.path.abspath(backup_dir)):
                         continue
                     for file in files:
