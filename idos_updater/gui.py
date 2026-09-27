@@ -1,7 +1,7 @@
 """
-Grafické rozhranie (GUI) pre IDOS Updater v knižnici Tkinter.
-Umožňuje pohodlný výber balíčkov, predvolené sady (presety), vyhľadávanie,
-automatickú detekciu inštalácie, zálohovanie a sledovanie priebehu sťahovania v reálnom čase.
+Grafické rozhraní (GUI) pro IDOS Updater v knihovně Tkinter.
+Umožňuje pohodlný výběr balíčků, přednastavené sady (presety), vyhledávání,
+automatickou detekci instalace, zálohování a sledování průběhu stahování v reálném čase.
 """
 
 import os
@@ -29,39 +29,37 @@ class IdosUpdaterGUI(tk.Tk):
         self.geometry("980, 720")
         self.minsize(800, 600)
 
-        # Načítanie konfigurácie
+        # Načtení konfigurace
         self.config_mgr = ConfigManager()
         self.config = self.config_mgr.load_config()
 
-        # Stavové premenné
+        # Stavové proměnné
         self.items: List[UpdateItem] = []
         self.selected_filenames: Set[str] = set()
         self.is_updating = False
         self.cancel_requested = False
 
-        # Nastavenie štýlu
+        # Nastavení stylu
         self._setup_styles()
 
-        # Vytvorenie používateľského rozhrania
+        # Vytvoření uživatelského rozhraní
         self._create_widgets()
 
-        # Inicializácia ciest a kontrola
+        # Inicializace cest a kontrola
         self._refresh_path_status()
         self._check_process_status()
 
-        # Asynchrónne načítanie zoznamu aktualizácií z webu
+        # Asynchronní načtení seznamu aktualizací z webu
         self.after(100, self.refresh_updates_list)
 
     def _setup_styles(self):
         self.style = ttk.Style(self)
-        # Výber motívu
         available_themes = self.style.theme_names()
         if 'clam' in available_themes:
             self.style.theme_use('clam')
         elif 'vista' in available_themes:
             self.style.theme_use('vista')
 
-        # Vlastné farby a písma
         self.style.configure("Treeview", rowheight=26, font=("Segoe UI", 9))
         self.style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
         self.style.configure("Primary.TButton", font=("Segoe UI", 10, "bold"), padding=6)
@@ -70,83 +68,83 @@ class IdosUpdaterGUI(tk.Tk):
         self.style.configure("SubHeader.TLabel", font=("Segoe UI", 9, "bold"))
 
     def _create_widgets(self):
-        # Hlavný kontajner
+        # Hlavní kontejner
         main_frame = ttk.Frame(self, padding="10 10 10 10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # 1. HLAVIČKA A CESTA K IDOS
-        path_group = ttk.LabelFrame(main_frame, text=" 📁 Inštalácia IDOS ", padding="8")
+        path_group = ttk.LabelFrame(main_frame, text=" 📁 Instalace IDOS ", padding="8")
         path_group.pack(fill=tk.X, pady=(0, 8))
 
         path_top_row = ttk.Frame(path_group)
         path_top_row.pack(fill=tk.X)
 
-        ttk.Label(path_top_row, text="Priečinok IDOS:").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(path_top_row, text="Složka IDOS:").pack(side=tk.LEFT, padx=(0, 6))
         self.path_var = tk.StringVar(value=self.config.get("idos_path", r"C:\IDOS"))
         self.path_entry = ttk.Entry(path_top_row, textvariable=self.path_var, width=50)
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
         self.path_entry.bind("<KeyRelease>", lambda e: self._refresh_path_status())
 
-        ttk.Button(path_top_row, text="Prehľadávať...", command=self._browse_path).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Button(path_top_row, text="Autodetekcia", command=self._autodetect_path).pack(side=tk.LEFT, padx=(0, 4))
-        self.launch_btn = ttk.Button(path_top_row, text="▶ Spustiť IDOS", command=self._launch_idos)
+        ttk.Button(path_top_row, text="Procházet...", command=self._browse_path).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(path_top_row, text="Autodetekce", command=self._autodetect_path).pack(side=tk.LEFT, padx=(0, 4))
+        self.launch_btn = ttk.Button(path_top_row, text="▶ Spustit IDOS", command=self._launch_idos)
         self.launch_btn.pack(side=tk.LEFT, padx=(4, 0))
 
-        # Stavový riadok inštalácie a bežiaceho procesu
+        # Stavový řádek instalace a běžícího procesu
         path_status_row = ttk.Frame(path_group)
         path_status_row.pack(fill=tk.X, pady=(6, 0))
 
-        self.path_status_label = ttk.Label(path_status_row, text="Kontrola priečinka...", font=("Segoe UI", 8))
+        self.path_status_label = ttk.Label(path_status_row, text="Kontrola složky...", font=("Segoe UI", 8))
         self.path_status_label.pack(side=tk.LEFT)
 
         self.proc_status_frame = ttk.Frame(path_status_row)
         self.proc_status_frame.pack(side=tk.RIGHT)
         self.proc_status_label = ttk.Label(self.proc_status_frame, text="", font=("Segoe UI", 8, "bold"))
         self.proc_status_label.pack(side=tk.LEFT, padx=(0, 6))
-        self.kill_proc_btn = ttk.Button(self.proc_status_frame, text="Ukončiť IDOS", command=self._kill_idos, width=12)
+        self.kill_proc_btn = ttk.Button(self.proc_status_frame, text="Ukončit IDOS", command=self._kill_idos, width=12)
 
-        # 2. RÝCHLE PRESETY (TLAČIDLÁ)
-        preset_group = ttk.LabelFrame(main_frame, text=" ⚡ Rýchly výber (Predvoľby) ", padding="6")
+        # 2. RYCHLÉ PRESETY (TLAČÍTKA)
+        preset_group = ttk.LabelFrame(main_frame, text=" ⚡ Rychlý výběr (Předvolby) ", padding="6")
         preset_group.pack(fill=tk.X, pady=(0, 8))
 
         preset_btn_frame = ttk.Frame(preset_group)
         preset_btn_frame.pack(fill=tk.X)
 
-        ttk.Button(preset_btn_frame, text="⚡ Rýchla (Program + Vlaky + Busy)", style="Preset.TButton",
+        ttk.Button(preset_btn_frame, text="⚡ Rychlá (Program + Vlaky + Busy)", style="Preset.TButton",
                    command=lambda: self._apply_preset("quick")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preset_btn_frame, text="📦 Kompletná (KOMPLET + Program)", style="Preset.TButton",
+        ttk.Button(preset_btn_frame, text="📦 Kompletní (KOMPLET + Program)", style="Preset.TButton",
                    command=lambda: self._apply_preset("komplet")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preset_btn_frame, text="🚆 Iba Vlaky & Busy", style="Preset.TButton",
+        ttk.Button(preset_btn_frame, text="🚆 Pouze Vlaky & Busy", style="Preset.TButton",
                    command=lambda: self._apply_preset("trains_buses")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preset_btn_frame, text="⚙️ Iba Program", style="Preset.TButton",
+        ttk.Button(preset_btn_frame, text="⚙️ Pouze Program", style="Preset.TButton",
                    command=lambda: self._apply_preset("program_only")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preset_btn_frame, text="🧹 Zrušiť výber", style="Preset.TButton",
+        ttk.Button(preset_btn_frame, text="🧹 Zrušit výběr", style="Preset.TButton",
                    command=self._clear_selection).pack(side=tk.RIGHT, padx=2)
 
-        # 3. VYHĽADÁVANIE A ZOZNAM BALÍČKOV
+        # 3. VYHLEDÁVÁNÍ A SEZNAM BALÍČKŮ
         list_group = ttk.LabelFrame(main_frame, text=" 📦 Dostupné balíčky z CHAPS ", padding="6")
         list_group.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
 
-        # Filter row
+        # Filter řádek
         filter_row = ttk.Frame(list_group)
         filter_row.pack(fill=tk.X, pady=(0, 6))
 
-        ttk.Label(filter_row, text="🔍 Filter / Hľadať:").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(filter_row, text="🔍 Filtr / Hledat:").pack(side=tk.LEFT, padx=(0, 6))
         self.search_var = tk.StringVar()
         self.search_entry = ttk.Entry(filter_row, textvariable=self.search_var, width=30)
         self.search_entry.pack(side=tk.LEFT, padx=(0, 8))
         self.search_entry.bind("<KeyRelease>", lambda e: self._filter_tree())
 
-        ttk.Label(filter_row, text="Kategória:").pack(side=tk.LEFT, padx=(8, 4))
-        self.category_var = tk.StringVar(value="Všetky")
+        ttk.Label(filter_row, text="Kategorie:").pack(side=tk.LEFT, padx=(8, 4))
+        self.category_var = tk.StringVar(value="Všechny")
         self.category_combo = ttk.Combobox(filter_row, textvariable=self.category_var, state="readonly", width=25)
         self.category_combo.pack(side=tk.LEFT, padx=(0, 8))
         self.category_combo.bind("<<ComboboxSelected>>", lambda e: self._filter_tree())
 
-        ttk.Button(filter_row, text="🔄 Obnoviť z webu", command=self.refresh_updates_list).pack(side=tk.RIGHT, padx=(4, 0))
-        ttk.Button(filter_row, text="Označiť zobrazené", command=self._select_all_visible).pack(side=tk.RIGHT, padx=(4, 0))
+        ttk.Button(filter_row, text="🔄 Obnovit z webu", command=self.refresh_updates_list).pack(side=tk.RIGHT, padx=(4, 0))
+        ttk.Button(filter_row, text="Označit zobrazené", command=self._select_all_visible).pack(side=tk.RIGHT, padx=(4, 0))
 
-        # Tabuľka / Treeview
+        # Tabulka / Treeview
         tree_frame = ttk.Frame(list_group)
         tree_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -154,10 +152,10 @@ class IdosUpdaterGUI(tk.Tk):
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
 
         self.tree.heading("selected", text="✓", anchor=tk.CENTER)
-        self.tree.heading("filename", text="Súbor", anchor=tk.W)
-        self.tree.heading("category", text="Kategória", anchor=tk.W)
-        self.tree.heading("date", text="Dátum", anchor=tk.CENTER)
-        self.tree.heading("size", text="Veľkosť", anchor=tk.E)
+        self.tree.heading("filename", text="Soubor", anchor=tk.W)
+        self.tree.heading("category", text="Kategorie", anchor=tk.W)
+        self.tree.heading("date", text="Datum", anchor=tk.CENTER)
+        self.tree.heading("size", text="Velikost", anchor=tk.E)
         self.tree.heading("description", text="Popis / Obsah", anchor=tk.W)
 
         self.tree.column("selected", width=40, anchor=tk.CENTER, stretch=False)
@@ -167,7 +165,7 @@ class IdosUpdaterGUI(tk.Tk):
         self.tree.column("size", width=105, anchor=tk.E, stretch=False)
         self.tree.column("description", width=350, anchor=tk.W, stretch=True)
 
-        # Scrollbary
+        # Posuvníky
         tree_scroll_y = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
         tree_scroll_x = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.tree.xview)
         self.tree.configure(yscrollcommand=tree_scroll_y.set, xscrollcommand=tree_scroll_x.set)
@@ -178,38 +176,37 @@ class IdosUpdaterGUI(tk.Tk):
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
 
-        # Kliknutie na riadok prepína označenie
         self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<space>", self._on_tree_space)
 
-        # Info panel pod tabuľkou
-        self.selection_info_label = ttk.Label(list_group, text="Načítavam zoznam...", font=("Segoe UI", 9, "bold"))
+        # Informační řádek pod tabulkou
+        self.selection_info_label = ttk.Label(list_group, text="Načítám seznam...", font=("Segoe UI", 9, "bold"))
         self.selection_info_label.pack(fill=tk.X, pady=(4, 0))
 
-        # 4. MOŽNOSTI A NASTAVENIA
+        # 4. VOLBY A NASTAVENÍ
         opts_frame = ttk.Frame(main_frame)
         opts_frame.pack(fill=tk.X, pady=(0, 6))
 
         self.backup_var = tk.BooleanVar(value=self.config.get("create_backup", True))
-        ttk.Checkbutton(opts_frame, text="Vytvoriť zálohu pred aktualizáciou (_backups/)",
+        ttk.Checkbutton(opts_frame, text="Vytvořit zálohu před aktualizací (_backups/)",
                         variable=self.backup_var, command=self._save_settings).pack(side=tk.LEFT, padx=(0, 15))
 
         self.autokill_var = tk.BooleanVar(value=self.config.get("auto_kill_idos", True))
-        ttk.Checkbutton(opts_frame, text="Automaticky ukončiť TT.exe pred inštaláciou",
+        ttk.Checkbutton(opts_frame, text="Automaticky ukončit TT.exe před instalací",
                         variable=self.autokill_var, command=self._save_settings).pack(side=tk.LEFT, padx=(0, 15))
 
         self.launch_after_var = tk.BooleanVar(value=self.config.get("launch_after_update", False))
-        ttk.Checkbutton(opts_frame, text="Spustiť IDOS po úspešnej aktualizácii",
+        ttk.Checkbutton(opts_frame, text="Spustit IDOS po úspěšné aktualizaci",
                         variable=self.launch_after_var, command=self._save_settings).pack(side=tk.LEFT)
 
-        # 5. PRIEBEH AKTUALIZÁCIE & TLAČIDLO SPUSTENIA
+        # 5. PRŮBĚH AKTUALIZACE & TLAČÍTKO SPUŠTĚNÍ
         bottom_frame = ttk.Frame(main_frame)
         bottom_frame.pack(fill=tk.X, pady=(4, 0))
 
         progress_container = ttk.Frame(bottom_frame)
         progress_container.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
 
-        self.progress_label = ttk.Label(progress_container, text="Pripravený.", font=("Segoe UI", 8))
+        self.progress_label = ttk.Label(progress_container, text="Připraven.", font=("Segoe UI", 8))
         self.progress_label.pack(anchor=tk.W)
 
         self.progress_bar = ttk.Progressbar(progress_container, orient=tk.HORIZONTAL, mode='determinate')
@@ -217,7 +214,7 @@ class IdosUpdaterGUI(tk.Tk):
 
         self.action_btn = tk.Button(
             bottom_frame,
-            text="▶ AKTUALIZOVAŤ VYBRANÉ",
+            text="▶ AKTUALIZOVAT VYBRANÉ",
             bg="#007acc",
             fg="white",
             font=("Segoe UI", 10, "bold"),
@@ -228,8 +225,8 @@ class IdosUpdaterGUI(tk.Tk):
         )
         self.action_btn.pack(side=tk.RIGHT)
 
-        # 6. PROTOKOL / LOGY (Rozbaliteľný)
-        log_group = ttk.LabelFrame(main_frame, text=" 📝 Záznam operácií ", padding="4")
+        # 6. PROTOKOL / LOGY
+        log_group = ttk.LabelFrame(main_frame, text=" 📝 Záznam operací ", padding="4")
         log_group.pack(fill=tk.BOTH, expand=False, pady=(6, 0))
         log_group.configure(height=100)
 
@@ -241,12 +238,12 @@ class IdosUpdaterGUI(tk.Tk):
         log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
     def log(self, message: str):
-        """Zapíše správu do záznamu operácií."""
+        """Zapíše zprávu do záznamu operací."""
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
 
     def _browse_path(self):
-        selected = filedialog.askdirectory(initialdir=self.path_var.get() or r"C:\IDOS", title="Vyberte priečinok IDOS")
+        selected = filedialog.askdirectory(initialdir=self.path_var.get() or r"C:\IDOS", title="Vyberte složku IDOS")
         if selected:
             self.path_var.set(os.path.normpath(selected))
             self._refresh_path_status()
@@ -256,9 +253,9 @@ class IdosUpdaterGUI(tk.Tk):
         detected = IdosEnvironment.find_default_path()
         if detected:
             self.path_var.set(detected)
-            self.log(f"Autodetekcia: Nájdený priečinok IDOS v {detected}")
+            self.log(f"Autodetekce: Nalezena složka IDOS v {detected}")
         else:
-            self.log("Autodetekcia: IDOS sa nenašiel v bežných umiestneniach, nastavené na C:\\IDOS")
+            self.log("Autodetekce: IDOS nebyl nalezen v běžných umístěních, nastaveno na C:\\IDOS")
             self.path_var.set(r"C:\IDOS")
         self._refresh_path_status()
         self._save_settings()
@@ -266,47 +263,46 @@ class IdosUpdaterGUI(tk.Tk):
     def _refresh_path_status(self):
         path = self.path_var.get().strip()
         if not path:
-            self.path_status_label.config(text="⚠️ Zadajte cestu k priečinku IDOS", foreground="#cc0000")
+            self.path_status_label.config(text="⚠️ Zadejte cestu ke složce IDOS", foreground="#cc0000")
             return
 
         if os.path.isdir(path):
             tt_exe = os.path.join(path, "TT.exe")
             if os.path.isfile(tt_exe):
-                self.path_status_label.config(text="✓ Nájdená platná inštalácia IDOS (TT.exe existuje)", foreground="#008000")
+                self.path_status_label.config(text="✓ Nalezena platná instalace IDOS (TT.exe existuje)", foreground="#008000")
             else:
-                self.path_status_label.config(text="ℹ️ Priečinok existuje, TT.exe ešte nie je nainštalovaný", foreground="#d97706")
+                self.path_status_label.config(text="ℹ️ Složka existuje, TT.exe ještě není nainstalován", foreground="#d97706")
         else:
-            self.path_status_label.config(text="ℹ️ Priečinok zatiaľ neexistuje (bude vytvorený pri aktualizácii)", foreground="#555555")
+            self.path_status_label.config(text="ℹ️ Složka zatím neexistuje (bude vytvořena při aktualizaci)", foreground="#555555")
 
     def _check_process_status(self):
-        """Pravidelná kontrola, či beží IDOS."""
+        """Pravidelná kontrola, zda běží IDOS."""
         try:
             is_running = IdosEnvironment.is_idos_running()
             if is_running:
-                self.proc_status_label.config(text="🔴 IDOS práve beží", foreground="#cc0000")
+                self.proc_status_label.config(text="🔴 IDOS právě běží", foreground="#cc0000")
                 self.kill_proc_btn.pack(side=tk.LEFT)
             else:
-                self.proc_status_label.config(text="🟢 IDOS nebeží", foreground="#008000")
+                self.proc_status_label.config(text="🟢 IDOS neběží", foreground="#008000")
                 self.kill_proc_btn.pack_forget()
         except Exception:
             pass
 
-        # Naplánovať ďalšiu kontrolu o 3 sekundy
         self.after(3000, self._check_process_status)
 
     def _kill_idos(self):
         if IdosEnvironment.kill_idos():
-            self.log("Proces IDOS (TT.exe) bol ukončený.")
+            self.log("Proces IDOS (TT.exe) byl ukončen.")
             self._check_process_status()
         else:
-            messagebox.showwarning("Upozornenie", "Nepodarilo sa ukončiť proces IDOS.")
+            messagebox.showwarning("Upozornění", "Nepodařilo se ukončit proces IDOS.")
 
     def _launch_idos(self):
         path = self.path_var.get().strip()
         if IdosEnvironment.launch_idos(path):
-            self.log(f"IDOS bol spustený z {path}")
+            self.log(f"IDOS byl spuštěn z {path}")
         else:
-            messagebox.showerror("Chyba", f"Nepodarilo sa spustiť IDOS. Súbor TT.exe v '{path}' neexistuje.")
+            messagebox.showerror("Chyba", f"Nepodařilo se spustit IDOS. Soubor TT.exe v '{path}' neexistuje.")
 
     def _save_settings(self):
         self.config["idos_path"] = self.path_var.get().strip()
@@ -316,9 +312,9 @@ class IdosUpdaterGUI(tk.Tk):
         self.config_mgr.save_config(self.config)
 
     def refresh_updates_list(self):
-        """Asynchrónne stiahne zoznam aktualizácií z webu CHAPS."""
-        self.log("Pripájam sa k serveru chaps.cz a sťahujem aktuálny zoznam balíčkov...")
-        self.selection_info_label.config(text="Sťahujem zoznam balíčkov z chaps.cz...")
+        """Asynchronně stáhne seznam aktualizací z webu CHAPS."""
+        self.log("Připojuji se k serveru chaps.cz a stahuji aktuální seznam balíčků...")
+        self.selection_info_label.config(text="Stahuji seznam balíčků z chaps.cz...")
 
         def worker():
             try:
@@ -332,24 +328,22 @@ class IdosUpdaterGUI(tk.Tk):
 
     def _on_updates_fetched(self, items: List[UpdateItem]):
         self.items = items
-        self.log(f"Úspešne načítaných {len(items)} balíčkov z CHAPS.")
+        self.log(f"Úspěšně načteno {len(items)} balíčků z CHAPS.")
 
-        # Aktualizácia kategórií v Comboboxe
-        categories = ["Všetky"] + sorted(list(set(it.category_label for it in items)))
+        categories = ["Všechny"] + sorted(list(set(it.category_label for it in items)))
         self.category_combo["values"] = categories
         if self.category_var.get() not in categories:
-            self.category_var.set("Všetky")
+            self.category_var.set("Všechny")
 
-        # Predvolene aplikujeme 'quick' preset ak ešte nie je nič zvolené
         if not self.selected_filenames:
             self._apply_preset("quick")
         else:
             self._filter_tree()
 
     def _on_fetch_error(self, err_msg: str):
-        self.log(f"CHYBA pri sťahovaní zoznamu: {err_msg}")
-        self.selection_info_label.config(text="Nepodarilo sa načítať balíčky zo servera.")
-        messagebox.showerror("Chyba spojenia", f"Nepodarilo sa načítať dáta z https://www.chaps.cz:\n\n{err_msg}")
+        self.log(f"CHYBA při stahování seznamu: {err_msg}")
+        self.selection_info_label.config(text="Nepodařilo se načíst balíčky ze serveru.")
+        messagebox.showerror("Chyba spojení", f"Nepodařilo se načíst data z https://www.chaps.cz:\n\n{err_msg}")
 
     def _apply_preset(self, preset_key: str):
         if preset_key not in PRESETS:
@@ -360,7 +354,7 @@ class IdosUpdaterGUI(tk.Tk):
             if preset["filter"](it):
                 self.selected_filenames.add(it.filename)
 
-        self.log(f"Aplikovaná predvoľba: {preset['name']}")
+        self.log(f"Aplikována předvolba: {preset['name']}")
         self._filter_tree()
 
     def _clear_selection(self):
@@ -402,17 +396,14 @@ class IdosUpdaterGUI(tk.Tk):
         query = self.search_var.get().strip().lower()
         cat_filter = self.category_var.get()
 
-        # Vyčistiť tabuľku
         for row in self.tree.get_children():
             self.tree.delete(row)
 
         visible_count = 0
         for it in self.items:
-            # Filter podľa kategórie
-            if cat_filter != "Všetky" and it.category_label != cat_filter:
+            if cat_filter != "Všechny" and it.category_label != cat_filter:
                 continue
 
-            # Filter podľa hľadaného textu
             if query:
                 full_text = f"{it.filename} {it.title} {it.description} {it.category_label}".lower()
                 if query not in full_text:
@@ -439,62 +430,59 @@ class IdosUpdaterGUI(tk.Tk):
         size_mb = total_size / (1024 * 1024)
 
         self.selection_info_label.config(
-            text=f"Vybraných: {len(sel_items)} z {len(self.items)} balíčkov  |  Celková veľkosť: {size_mb:.2f} MB"
+            text=f"Vybráno: {len(sel_items)} z {len(self.items)} balíčků  |  Celková velikost: {size_mb:.2f} MB"
         )
 
     def start_update(self):
-        """Spustí proces sťahovania a inštalácie vo vedľajšom vlákne."""
+        """Spustí proces stahování a instalace ve vedlejším vlákně."""
         if self.is_updating:
             return
 
         idos_path = self.path_var.get().strip()
         if not idos_path:
-            messagebox.showwarning("Chýba cesta", "Prosím zadajte alebo vyberte priečinok inštalácie IDOS.")
+            messagebox.showwarning("Chybí cesta", "Prosím zadejte nebo vyberte složku instalace IDOS.")
             return
 
         sel_items = [it for it in self.items if it.filename in self.selected_filenames]
         if not sel_items:
-            messagebox.showinfo("Prázdny výber", "Nevybrali ste žiadne balíčky na aktualizáciu.")
+            messagebox.showinfo("Prázdný výběr", "Nevybrali jste žádné balíčky k aktualizaci.")
             return
 
-        # Kontrola bežiaceho procesu IDOS
         if IdosEnvironment.is_idos_running():
             if self.autokill_var.get():
-                self.log("Ukončujem bežiaci proces TT.exe pred inštaláciou...")
+                self.log("Ukončuji běžící proces TT.exe před instalací...")
                 if not IdosEnvironment.kill_idos():
-                    if not messagebox.askyesno("IDOS beží", "Nepodarilo sa automaticky ukončiť IDOS. Chcete pokračovať napriek tomu?"):
+                    if not messagebox.askyesno("IDOS běží", "Nepodařilo se automaticky ukončit IDOS. Chcete přesto pokračovat?"):
                         return
             else:
                 resp = messagebox.askyesno(
-                    "IDOS beží",
-                    "Program IDOS je spustený. Pred aktualizáciou je nutné ho ukončiť.\n\nChcete ho ukončiť teraz?"
+                    "IDOS běží",
+                    "Program IDOS je spuštěn. Před aktualizací je nutné jej ukončit.\n\nChcete jej ukončit nyní?"
                 )
                 if resp:
                     IdosEnvironment.kill_idos()
                 else:
                     return
 
-        # Nastavenie stavu na bežiaci
         self.is_updating = True
         self.cancel_requested = False
-        self.action_btn.config(text="⏳ Prebieha aktualizácia...", state=tk.DISABLED, bg="#6c757d")
+        self.action_btn.config(text="⏳ Probíhá aktualizace...", state=tk.DISABLED, bg="#6c757d")
         self.progress_bar["value"] = 0
         self._save_settings()
 
-        # Spustenie pracovného vlákna
         threading.Thread(target=self._update_worker, args=(idos_path, sel_items), daemon=True).start()
 
     def _update_worker(self, idos_path: str, items: List[UpdateItem]):
         self.log("\n" + "=" * 55)
-        self.log(f"Začína aktualizácia {len(items)} balíčkov...")
-        self.log(f"Cieľový priečinok: {idos_path}")
+        self.log(f"Začíná aktualizace {len(items)} balíčků...")
+        self.log(f"Cílová složka: {idos_path}")
 
-        # 1. Zálohovanie
+        # 1. Zálohování
         if self.backup_var.get() and os.path.isdir(idos_path) and os.listdir(idos_path):
-            self.after(0, lambda: self.progress_label.config(text="Vytváram zálohu existujúcich dát..."))
+            self.after(0, lambda: self.progress_label.config(text="Vytvářím zálohu stávajících dat..."))
             BackupManager.create_backup(idos_path, log_callback=lambda msg: self.after(0, lambda m=msg: self.log(m)))
 
-        # 2. Sťahovanie a inštalácia
+        # 2. Stahování a instalace
         updater = UpdateManager(idos_path)
         total_items = len(items)
 
@@ -525,20 +513,19 @@ class IdosUpdaterGUI(tk.Tk):
 
         def on_complete():
             self.is_updating = False
-            self.action_btn.config(text="▶ AKTUALIZOVAŤ VYBRANÉ", state=tk.NORMAL, bg="#007acc")
+            self.action_btn.config(text="▶ AKTUALIZOVAT VYBRANÉ", state=tk.NORMAL, bg="#007acc")
             self.progress_bar["value"] = 100
-            self.progress_label.config(text="Aktualizácia úspešne dokončená.")
+            self.progress_label.config(text="Aktualizace úspěšně dokončena.")
             self._refresh_path_status()
 
             self.log("=" * 55)
             if err_cnt == 0:
-                self.log(f"✓ ÚSPEŠNE DOKONČENÉ: Nainštalovaných {success_cnt} balíčkov.")
-                messagebox.showinfo("Hotovo", f"Aktualizácia prebehla úspešne!\n\nNainštalovaných: {success_cnt} balíčkov.")
+                self.log(f"✓ ÚSPĚŠNĚ DOKONČENO: Nainstalováno {success_cnt} balíčků.")
+                messagebox.showinfo("Hotovo", f"Aktualizace proběhla úspěšně!\n\nNainstalováno: {success_cnt} balíčků.")
             else:
-                self.log(f"⚠️ DOKONČENÉ S CHYBAMI: {success_cnt} úspešných, {err_cnt} chýb.")
-                messagebox.showwarning("Dokončené s chybami", f"Aktualizácia skončila s chybami ({err_cnt} chýb).\nPozrite si záznam operácií.")
+                self.log(f"⚠️ DOKONČENO S CHYBAMI: {success_cnt} úspěšných, {err_cnt} chyb.")
+                messagebox.showwarning("Dokončeno s chybami", f"Aktualizace skončila s chybami ({err_cnt} chyb).\nProhlédněte si záznam operací.")
 
-            # Spustenie IDOS po aktualizácii
             if self.launch_after_var.get() and err_cnt == 0:
                 self._launch_idos()
 

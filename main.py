@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Hlavný spúšťací súbor aplikácie IDOS Updater.
-Ak sa spustí bez parametrov, otvorí moderné grafické rozhranie (GUI).
-Ak sa spustia argumenty príkazového riadka, vykoná príkaz (CLI).
+Hlavní spouštěcí soubor aplikace IDOS Updater.
+Pokud je spuštěn bez parametrů, otevře grafické rozhraní (GUI).
+Pokud jsou předány argumenty příkazové řádky, provede příkaz (CLI).
 """
 
 import os
 import sys
 
-# Pridanie priečinka do sys.path pre priamy import
+# Přidání složky do sys.path pro přímý import
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)

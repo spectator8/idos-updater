@@ -1,7 +1,7 @@
 """
-Jadro aplikácie IDOS Updater.
-Obsahuje triedy pre sťahovanie zoznamu aktualizácií z chaps.cz,
-správu IDOS prostredia, zálohovanie, sťahovanie archívov a ich extrakciu.
+Jádro aplikace IDOS Updater.
+Obsahuje třídy pro stahování seznamu aktualizací z chaps.cz,
+správu prostředí IDOS, zálohování, stahování archivů a jejich extrakci.
 """
 
 import os
@@ -59,7 +59,7 @@ class UpdateItem:
 
 
 def decode_chaps_text(text: str) -> str:
-    """Dekóduje HTML entity generované z Windows-1250 byte hodnôt do správneho Unicode."""
+    """Dekóduje HTML entity generované z bajtových hodnot Windows-1250 do správného Unicode."""
     def repl(m):
         code = int(m.group(1))
         if code < 256:
@@ -75,23 +75,23 @@ def decode_chaps_text(text: str) -> str:
 
 
 class ChapsScraper:
-    """Sťahuje a spracováva zoznam dostupných aktualizácií z chaps.cz."""
+    """Stahuje a zpracovává seznam dostupných aktualizací z chaps.cz."""
 
     def __init__(self, url: str = CHAPS_URL):
         self.url = url
 
     def parse_size_bytes(self, size_str: str) -> int:
-        """Prevedie napr. '1.975.168 B' alebo '76.850 B' na celé číslo bajtov."""
+        """Převede např. '1.975.168 B' nebo '76.850 B' na celé číslo bajtů."""
         clean = re.sub(r'[^\d]', '', size_str)
         return int(clean) if clean else 0
 
     def fetch_updates(self, timeout: int = 20) -> List[UpdateItem]:
-        """Stiahne webovú stránku a vráti zoznam položiek."""
+        """Stáhne webovou stránku a vrátí seznam položek."""
         req = urllib.request.Request(
             self.url,
             headers={
                 "User-Agent": USER_AGENT,
-                "Accept-Language": "sk,cs;q=0.9,en;q=0.8",
+                "Accept-Language": "cs,sk;q=0.9,en;q=0.8",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
             }
         )
@@ -108,7 +108,7 @@ class ChapsScraper:
         current_section = "Všeobecné"
         current_subsection = ""
 
-        # Hľadáme h3, h4 a productListItem
+        # Hledáme h3, h4 a productListItem
         pattern = re.compile(
             r'(<h3[^>]*>.*?</h3>|<h4[^>]*>.*?</h4>|<div class="productListItem">.*?</div>\s*</div>)',
             re.DOTALL | re.IGNORECASE
@@ -119,7 +119,7 @@ class ChapsScraper:
             if block.startswith('<h3') or block.startswith('<H3'):
                 raw_title = re.sub(r'<[^>]+>', '', block).strip()
                 title = html.unescape(raw_title)
-                # Ignorujeme informačné hlavičky na začiatku
+                # Ignorujeme informační hlavičky na začátku
                 if title and not any(title.startswith(ignore) for ignore in [
                     'Důležité', 'Obsah', 'Postup', 'Upozornění', 'Poznámka', 'Důležitá', 'Navigace', 'Nabídka'
                 ]):
@@ -129,14 +129,14 @@ class ChapsScraper:
                 raw_sub = re.sub(r'<[^>]+>', '', block).strip()
                 current_subsection = html.unescape(raw_sub)
             elif 'productListItem' in block:
-                # Odkaz na stiahnutie
+                # Odkaz ke stažení
                 link_m = re.search(r'href=["\'](https?://[^"\']+\.ZIP)["\']', block, re.IGNORECASE)
                 if not link_m:
                     continue
                 download_url = link_m.group(1)
                 filename = download_url.split('/')[-1]
 
-                # Názov
+                # Název
                 title_m = re.search(r'<h2[^>]*>(.*?)</h2>', block, re.DOTALL | re.IGNORECASE)
                 title_val = ""
                 if title_m:
@@ -157,11 +157,11 @@ class ChapsScraper:
                 if extra_desc:
                     full_desc = f"{main_desc} ({extra_desc})"
 
-                # Dátum aktualizácie
+                # Datum aktualizace
                 date_m = re.search(r'Datum aktualizace:\s*<strong>([^<]+)</strong>', block, re.IGNORECASE)
                 date_val = date_m.group(1).strip() if date_m else ""
 
-                # Veľkosť
+                # Velikost
                 size_m = re.search(r'velikost:\s*<strong>([^<]+)</strong>', block, re.IGNORECASE)
                 size_val = size_m.group(1).strip() if size_m else ""
                 size_bytes = self.parse_size_bytes(size_val)
@@ -182,7 +182,7 @@ class ChapsScraper:
 
 
 class IdosEnvironment:
-    """Poskytuje informácie o lokálnej inštalácii IDOS a procesoch."""
+    """Poskytuje informace o lokální instalaci IDOS a procesech."""
 
     POSSIBLE_PATHS = [
         r"C:\IDOS",
@@ -204,7 +204,7 @@ class IdosEnvironment:
 
     @classmethod
     def is_idos_running(cls) -> bool:
-        """Zistí, či beží proces TT.exe."""
+        """Zjistí, zda běží proces TT.exe."""
         if os.name != 'nt':
             return False
         try:
@@ -236,12 +236,12 @@ class IdosEnvironment:
             subprocess.Popen([exe_path], cwd=idos_path)
             return True
         except Exception as e:
-            print(f"Chyba pri spustení IDOS: {e}")
+            print(f"Chyba při spuštění IDOS: {e}")
             return False
 
 
 class ConfigManager:
-    """Spravuje používateľské nastavenia v JSON konfiguračnom súbore."""
+    """Spravuje uživatelská nastavení v JSON konfiguračním souboru."""
 
     def __init__(self, config_file: Optional[str] = None):
         if config_file:
@@ -267,7 +267,7 @@ class ConfigManager:
                     data = json.load(f)
                     default_config.update(data)
             except Exception as e:
-                print(f"Chyba pri načítaní konfigurácie: {e}")
+                print(f"Chyba při načítání konfigurace: {e}")
         return default_config
 
     def save_config(self, config: dict):
@@ -275,17 +275,17 @@ class ConfigManager:
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Chyba pri ukladaní konfigurácie: {e}")
+            print(f"Chyba při ukládání konfigurace: {e}")
 
 
 class BackupManager:
-    """Vytvára zálohu IDOS adresára pred aktualizáciou."""
+    """Vytváří zálohu složky IDOS před aktualizací."""
 
     @classmethod
     def create_backup(cls, idos_path: str, backup_dir: Optional[str] = None, log_callback: Optional[Callable[[str], None]] = None) -> Optional[str]:
         if not os.path.isdir(idos_path):
             if log_callback:
-                log_callback(f"Adresár {idos_path} neexistuje, záloha preskočená.")
+                log_callback(f"Složka {idos_path} neexistuje, záloha přeskočena.")
             return None
 
         if backup_dir is None:
@@ -296,12 +296,12 @@ class BackupManager:
         backup_zip = os.path.join(backup_dir, f"idos_backup_{timestamp}.zip")
 
         if log_callback:
-            log_callback(f"Vytváram zálohu do: {backup_zip} ...")
+            log_callback(f"Vytvářím zálohu do: {backup_zip} ...")
 
         try:
             with zipfile.ZipFile(backup_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(idos_path):
-                    # Preskočíme adresár so zálohami, aby sme nezálohovali zálohy
+                    # Přeskočíme složku se zálohami, abychom nezálohovali zálohy
                     if os.path.abspath(root).startswith(os.path.abspath(backup_dir)):
                         continue
                     for file in files:
@@ -311,16 +311,16 @@ class BackupManager:
 
             if log_callback:
                 size_mb = os.path.getsize(backup_zip) / (1024 * 1024)
-                log_callback(f"Záloha úspešne dokončená ({size_mb:.2f} MB).")
+                log_callback(f"Záloha úspěšně dokončena ({size_mb:.2f} MB).")
             return backup_zip
         except Exception as e:
             if log_callback:
-                log_callback(f"Chyba pri vytváraní zálohy: {e}")
+                log_callback(f"Chyba při vytváření zálohy: {e}")
             return None
 
 
 class UpdateManager:
-    """Riadi proces sťahovania a extrakcie balíčkov."""
+    """Řídí proces stahování a extrakce balíčků."""
 
     def __init__(self, idos_path: str):
         self.idos_path = idos_path
@@ -333,8 +333,8 @@ class UpdateManager:
         cancel_check: Optional[Callable[[], bool]] = None
     ) -> Tuple[int, int, List[str]]:
         """
-        Stiahne a rozbalí vybrané položky.
-        Vráti: (úspešné_položky, chybné_položky, zoznam_chýb)
+        Stáhne a rozbalí vybrané položky.
+        Vrátí: (úspěšné_položky, chybné_položky, seznam_chyb)
         """
         os.makedirs(self.idos_path, exist_ok=True)
         success_count = 0
@@ -345,14 +345,14 @@ class UpdateManager:
         for idx, item in enumerate(items, start=1):
             if cancel_check and cancel_check():
                 if log_callback:
-                    log_callback("Aktualizácia bola zrušená používateľom.")
+                    log_callback("Aktualizace byla zrušena uživatelem.")
                 break
 
             if log_callback:
-                log_callback(f"[{idx}/{total_items}] Sťahujem {item.filename} ({item.size_str}) - {item.title} ...")
+                log_callback(f"[{idx}/{total_items}] Stahuji {item.filename} ({item.size_str}) - {item.title} ...")
 
             try:
-                # Sťahovanie do dočasného súboru alebo pamäte
+                # Stahování
                 req = urllib.request.Request(item.url, headers={"User-Agent": USER_AGENT})
                 start_time = time.time()
                 downloaded = 0
@@ -379,17 +379,17 @@ class UpdateManager:
 
                 zip_data = b''.join(chunks)
                 if log_callback:
-                    log_callback(f"Rozbaľujem {item.filename} do {self.idos_path} ...")
+                    log_callback(f"Rozbaluji {item.filename} do {self.idos_path} ...")
 
-                # Extrakcia
+                # Extrakce
                 self._extract_zip(item.filename, zip_data, log_callback)
                 success_count += 1
                 if log_callback:
-                    log_callback(f"✓ {item.filename} úspešne nainštalovaný.")
+                    log_callback(f"✓ {item.filename} úspěšně nainstalován.")
 
             except Exception as e:
                 error_count += 1
-                err_msg = f"Chyba pri inštalácii {item.filename}: {e}"
+                err_msg = f"Chyba při instalaci {item.filename}: {e}"
                 errors.append(err_msg)
                 if log_callback:
                     log_callback(f"✗ {err_msg}")
@@ -397,7 +397,7 @@ class UpdateManager:
         return success_count, error_count, errors
 
     def _extract_zip(self, filename: str, zip_data: bytes, log_callback: Optional[Callable[[str], None]] = None):
-        """Rozbalí ZIP archív a správne ošetrí špeciálne cesty ako TTAKT (App/ -> root)."""
+        """Rozbalí ZIP archiv a správně ošetří speciální cesty jako TTAKT (App/ -> root)."""
         import io
         is_ttakt = (filename.upper() == "TTAKT.ZIP")
 
@@ -407,12 +407,12 @@ class UpdateManager:
                     continue
 
                 member_name = member.filename
-                # Odstránenie ./ na začiatku
+                # Odstranění ./ na začátku
                 if member_name.startswith("./") or member_name.startswith(".\\"):
                     member_name = member_name[2:]
 
-                # Špeciálne pravidlo pre TTAKT.ZIP: CHAPS ukladá súbory do priečinka App/,
-                # ale patria priamo do koreňového priečinka IDOS!
+                # Speciální pravidlo pro TTAKT.ZIP: CHAPS ukládá soubory do složky App/,
+                # ale patří přímo do kořenové složky IDOS!
                 if is_ttakt:
                     if member_name.lower().startswith("app/") or member_name.lower().startswith("app\\"):
                         member_name = member_name[4:]
@@ -421,40 +421,40 @@ class UpdateManager:
                 target_dir = os.path.dirname(target_file_path)
                 os.makedirs(target_dir, exist_ok=True)
 
-                # Bezpečný zápis súboru
+                # Bezpečný zápis souboru
                 with z.open(member) as source_f, open(target_file_path, "wb") as dest_f:
                     shutil.copyfileobj(source_f, dest_f)
 
 
-# Prednastavené sady aktualizácií (Presety)
+# Přednastavené sady aktualizací (Presety)
 PRESETS = {
     "quick": {
-        "name": "⚡ Rýchla aktualizácia (Program + Vlaky + Busy)",
-        "description": "Aktualizuje spustiteľný program (TTAKT), písmo (TTFONT), vlaky ČR/Európa a autobusy ČR/SR.",
+        "name": "⚡ Rychlá aktualizace (Program + Vlaky + Busy)",
+        "description": "Aktualizuje spustitelný program (TTAKT), písmo (TTFONT), vlaky ČR/Evropa a autobusy ČR/SR.",
         "filter": lambda item: item.filename.upper() in (
             "TTAKT.ZIP", "TTFONT.ZIP", "VLAK26E.ZIP", "VLAK26C.ZIP", "BUS26C.ZIP", "BUS26S.ZIP"
         )
     },
     "komplet": {
-        "name": "📦 Kompletná aktualizácia (Program + KOMPLET.ZIP)",
-        "description": "Stiahne program a kompletný archív všetkých cestovných poriadkov (vlaky, busy, MHD).",
+        "name": "📦 Kompletní aktualizace (Program + KOMPLET.ZIP)",
+        "description": "Stáhne program a kompletní archiv všech jízdních řádů (vlaky, busy, MHD).",
         "filter": lambda item: item.filename.upper() in ("TTAKT.ZIP", "TTFONT.ZIP", "KOMPLET.ZIP")
     },
     "trains_buses": {
-        "name": "🚆 Iba Vlaky a Autobusy",
-        "description": "Aktualizuje všetky vlakové a autobusové linky (ČR, SR, Európa).",
+        "name": "🚆 Pouze Vlaky a Autobusy",
+        "description": "Aktualizuje všechny vlakové a autobusové linky (ČR, SR, Evropa).",
         "filter": lambda item: item.filename.upper() in (
             "VLAK26E.ZIP", "VLAK26C.ZIP", "VLAKPID26.ZIP", "BUS26C.ZIP", "BUS26CK.ZIP", "BUS26CKD.ZIP", "BUS26S.ZIP"
         )
     },
     "program_only": {
-        "name": "⚙️ Iba Program (TTAKT + TTFONT)",
-        "description": "Aktualizuje iba samotný prehliadač IDOS a systémové písmo.",
+        "name": "⚙️ Pouze Program (TTAKT + TTFONT)",
+        "description": "Aktualizuje pouze samotný prohlížeč IDOS a systémové písmo.",
         "filter": lambda item: item.filename.upper() in ("TTAKT.ZIP", "TTFONT.ZIP")
     },
     "all_individual": {
-        "name": "🌐 Všetky dostupné balíčky jednotlivo",
-        "description": "Aktualizuje všetky balíčky vrátane všetkých MHD miest, máp a taríf (okrem TTOLD a KOMPLET).",
+        "name": "🌐 Všechny dostupné balíčky jednotlivě",
+        "description": "Aktualizuje všechny balíčky včetně všech MHD měst, map a tarifů (kromě TTOLD a KOMPLET).",
         "filter": lambda item: item.filename.upper() not in ("TTOLD.ZIP", "KOMPLET.ZIP")
     }
 }
