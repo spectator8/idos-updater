@@ -26,7 +26,7 @@ class IdosUpdaterGUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("IDOS Aktualizátor (CHAPS)")
-        self.geometry("980, 720")
+        self.geometry("980x720")
         self.minsize(800, 600)
 
         # Načtení konfigurace
