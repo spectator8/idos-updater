@@ -397,6 +397,18 @@ class IdosUpdaterGUI(tk.Tk):
             self.log("Všechny nainstalované balíčky jsou již aktuální.")
         self._filter_tree()
 
+    def _select_not_installed(self):
+        """Označí všechny balíčky, které nejsou nainstalovány (status not_installed)."""
+        self.selected_filenames.clear()
+        count = 0
+        for it in self.items:
+            status_code, _, _ = IdosEnvironment.get_item_update_status(it, self.scan_result)
+            if status_code == "not_installed":
+                self.selected_filenames.add(it.filename)
+                count += 1
+        self.log(f"Přidáno {count} nenainstalovaných balíčků do výběru.")
+        self._filter_tree()
+
     def _clear_selection(self):
         self.selected_filenames.clear()
         self._filter_tree()
