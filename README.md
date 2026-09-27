@@ -22,7 +22,8 @@ Kompletní a spolehlivá aplikace v Pythonu pro automatickou aktualizaci program
 - **🌐 Lokální webové rozhraní:**
   - Spuštění v prohlížeči jako alternativa k desktopovému GUI.
   - Filtrování balíčků, jejich stavů a kategorií, výběr presetů a aktualizace s průběhem a protokolem.
-  - Server naslouchá výhradně na tomto počítači (`127.0.0.1`) a nevyžaduje externí Python balíčky.
+  - Frontend používá React, Tailwind CSS a shadcn/ui; Python server naslouchá výhradně na tomto počítači (`127.0.0.1`).
+  - Při běžném spuštění nejsou potřeba Node.js ani externí Python balíčky; Node.js je nutný pouze pro vývoj a sestavení frontendu.
 
 - **⚙️ Konzolový režim (CLI) pro automatizaci a Plánovač úloh:**
   - Podpora pro bezobslužný běh (`--non-interactive`, `--preset quick`, `--launch`, atd.).
@@ -56,6 +57,32 @@ python main.py --web
 
 Pro výběr jiné cílové složky lze použít `python main.py --web --path "C:\IDOS"`.
 Webový server zůstává spuštěný v konzoli; ukončíte jej pomocí `Ctrl+C`.
+
+### Sestavení webového frontendu
+
+Hotové frontendové soubory jsou součástí repozitáře, takže pro běžné spuštění webového rozhraní není potřeba Node.js. Pro změny ve frontendu je potřeba Node.js 20.19 nebo novější:
+
+```bash
+cd web_client
+npm ci
+npm run dev
+```
+
+Otevřete `http://localhost:5173`. Vývojový server očekává běžící Python backend na `127.0.0.1:8765`; spusťte ho v druhém terminálu:
+
+```bash
+# PowerShell
+$env:IDOS_WEB_PORT = "8765"
+python ..\main.py --web
+```
+
+Před publikováním změn vytvořte distribuční frontendové soubory:
+
+```bash
+npm run build
+```
+
+Build se ukládá do `idos_updater/web_dist/` a tato složka se commituje spolu se zdrojovými změnami.
 
 ### 3. Spuštění přes příkazovou řádku (CLI)
 
@@ -99,12 +126,13 @@ idos-updater/
 │   ├── core.py          # Logika stahování, parsování CHAPS, extrakce, zálohování
 │   ├── cli.py           # Plnohodnotné CLI rozhraní s argumenty
 │   ├── gui.py           # Grafické okenní rozhraní v Tkinter
-│   ├── web.py           # Lokální webové rozhraní a HTTP server
-│   └── web_ui.html      # Uživatelské rozhraní pro prohlížeč
+│   ├── web.py           # Lokální HTTP server a aktualizace
+│   └── web_dist/        # Sestavený webový frontend
 │
 ├── main.py              # Hlavní spouštěč (GUI nebo CLI dle argumentů)
 ├── run_gui.bat          # Spouštěč GUI pro Windows (dvojklik)
 ├── run_web.bat          # Spouštěč webového rozhraní pro Windows
+├── web_client/          # Zdrojové soubory React + Vite + Tailwind + shadcn/ui
 ├── update_quick.bat     # Spouštěč rychlé aktualizace pro Windows (dvojklik)
 ├── test_updater.py      # Integrační a unit testy
 ├── requirements.txt     # Informace o závislostech
