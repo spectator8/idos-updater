@@ -503,7 +503,13 @@ class IdosUpdaterGUI(tk.Tk):
             messagebox.showwarning("Chybí cesta", "Prosím zadejte nebo vyberte složku instalace IDOS.")
             return
 
-        sel_items = [it for it in self.items if it.filename in self.selected_filenames]
+        # Include selected items and any packages that are not installed
+        sel_items = [
+            it for it in self.items
+            if (it.filename in self.selected_filenames) or (
+                IdosEnvironment.get_item_update_status(it, self.scan_result)[0] == "not_installed"
+            )
+        ]
         if not sel_items:
             messagebox.showinfo("Prázdný výběr", "Nevybrali jste žádné balíčky k aktualizaci.")
             return
