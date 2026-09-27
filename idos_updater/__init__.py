@@ -1,5 +1,5 @@
 """
-IDOS Updater - Nástroj pre aktualizáciu programu a cestovných poriadkov IDOS (CHAPS).
+IDOS Updater - Nástroj pro aktualizaci programu a jízdních řádů IDOS (CHAPS).
 """
 
 __version__ = "1.0.0"

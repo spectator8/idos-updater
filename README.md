@@ -1,108 +1,109 @@
 # 🚆 IDOS Updater (CHAPS)
 
-Kompletná a spoľahlivá aplikácia v Pythone na automatickú aktualizáciu programu a cestovných poriadkov offline aplikácie **IDOS pre Windows** od spoločnosti **CHAPS spol. s r.o.** (zdroj: [chaps.cz/cs/download/idos](https://www.chaps.cz/cs/download/idos)).
+Kompletní a spolehlivá aplikace v Pythonu pro automatickou aktualizaci programu a jízdních řádů offline aplikace **IDOS pro Windows** od společnosti **CHAPS spol. s r.o.** (zdroj: [chaps.cz/cs/download/idos](https://www.chaps.cz/cs/download/idos)).
 
 ---
 
-## ✨ Kľúčové vlastnosti
+## ✨ Klíčové vlastnosti
 
-- **🖥️ Moderné grafické rozhranie (GUI):**
-  - Prehľadná tabuľka všetkých 220+ balíčkov rozdelených podľa kategórií (Program, Vlaky, Autobusy, MHD mestá, Tarify, Mapy, Doplnkové info).
-  - Rýchle filtrovanie a fulltextové vyhľadávanie (napr. *Brno*, *PID*, *Košice*, *Vlaky*).
-  - Predvolené rýchle sady (Presety):
-    - ⚡ **Rýchla aktualizácia** (Program + TT Font + Vlaky ČR/Európa + Autobusy ČR/SR)
-    - 📦 **Kompletná aktualizácia** (Program + archív `KOMPLET.ZIP`)
-    - 🚆 **Iba Vlaky a Autobusy**
-    - ⚙️ **Iba samotný program** (`TTAKT.ZIP` + `TTFONT.ZIP`)
-  - Sledovanie rýchlosti sťahovania, ETA, veľkosti a percentuálneho priebehu v reálnom čase.
-  - Tlačidlo **▶ Spustiť IDOS** priamo z aplikácie.
+- **🖥️ Moderní grafické rozhraní (GUI):**
+  - Přehledná tabulka všech 220+ balíčků rozdělených podle kategorií (Programové vybavení, Jízdní řády - Vlaky, Autobusy, MHD města, Tarifní soubory, Mapy, Doplňkové info).
+  - Rychlé filtrování a fulltextové vyhledávání (např. *Brno*, *PID*, *Ostrava*, *Vlaky*).
+  - Přednastavené rychlé sady (Presety):
+    - ⚡ **Rychlá aktualizace** (Program `TTAKT` + písmo `TTFONT` + Vlaky ČR/Evropa + Autobusy ČR/SR)
+    - 📦 **Kompletní aktualizace** (Program + archiv `KOMPLET.ZIP`)
+    - 🚆 **Pouze Vlaky a Autobusy**
+    - ⚙️ **Pouze samotný program** (`TTAKT.ZIP` + `TTFONT.ZIP`)
+  - Sledování rychlosti stahování, přenesené velikosti a procentuálního průběhu v reálném čase.
+  - Tlačítko **▶ Spustit IDOS** přímo z aplikace.
 
-- **⚙️ Konzolový režim (CLI) pre automatizáciu a Plánovač úloh:**
-  - Podpora pre bezobslužný beh (`--non-interactive`, `--preset quick`, `--launch`, atď.).
-  - Možnosť integrovať do cronu alebo Windows Task Scheduler na pravidelnú aktualizáciu napr. každý piatok.
+- **⚙️ Konzolový režim (CLI) pro automatizaci a Plánovač úloh:**
+  - Podpora pro bezobslužný běh (`--non-interactive`, `--preset quick`, `--launch`, atd.).
+  - Možnost snadné integrace do Plánovače úloh systému Windows (Task Scheduler) pro pravidelné týdenní aktualizace.
 
-- **🛡️ Bezpečnosť a spoľahlivosť:**
-  - **Detekcia a zatvorenie bežiaceho IDOS**: Skontroluje, či beží `TT.exe`, aby nedošlo k uzamknutiu súborov pri prepise.
-  - **Automatické zálohovanie**: Pred prepísaním vytvorí timestamped ZIP archív v priečinku `_backups/`.
-  - **Správne rozbalenie `TTAKT.ZIP`**: Automaticky ošetrí špecifikum CHAPS archívu (presunie súbory z vnútorného priečinka `App/` priamo do koreňa IDOS).
-  - **Žiadne externé závislosti**: Funguje ihneď na čistom Pythone 3.8+ bez potreby inštalovať ďalšie pip balíčky.
+- **🛡️ Bezpečnost a spolehlivost:**
+  - **Detekce a ukončení běžícího IDOS**: Zkontroluje, zda běží proces `TT.exe`, aby nedošlo k uzamčení souborů při přepisu.
+  - **Automatické zálohování**: Před přepsáním vytvoří timestamped ZIP archiv ve složce `_backups/`.
+  - **Správné rozbalení `TTAKT.ZIP`**: Automaticky ošetří specifikum archivu CHAPS (přesune soubory z vnitřní složky `App/` přímo do kořene IDOS).
+  - **Žádné externí závislosti**: Funguje ihned na čistém Pythonu 3.8+ bez nutnosti instalovat další balíčky přes pip.
 
 ---
 
-## 🚀 Spustenie aplikácie
+## 🚀 Spuštění aplikace
 
-### 1. Spustenie Grafického rozhrania (GUI)
+### 1. Spuštění Grafického rozhraní (GUI)
 
-Stačí dvakrát kliknúť na **`run_gui.bat`** alebo spustiť cez terminál:
+Stačí dvakrát kliknout na **`run_gui.bat`** nebo spustit přes terminál:
 
 ```bash
 python main.py
 ```
 
-### 2. Spustenie cez príkazový riadok (CLI)
+### 2. Spuštění přes příkazovou řádku (CLI)
 
-#### Zoznam a vyhľadávanie:
+#### Výpis a vyhledávání:
 ```bash
-# Zoznam všetkých dostupných balíčkov z CHAPS
+# Seznam všech dostupných balíčků z CHAPS
 python main.py --list
 
-# Vyhľadanie konkrétneho mesta / linky
+# Vyhledání konkrétního města / linky
 python main.py --search "Brno"
 python main.py --search "Praha"
 ```
 
-#### Rýchla aktualizácia:
+#### Rychlá aktualizace:
 ```bash
-# Aktualizácia cez preset (rýchly balík: program + vlaky + busy) a následné spustenie IDOS
+# Aktualizace přes preset (rychlý balík: program + vlaky + busy) a následné spuštění IDOS
 python main.py --preset quick --launch
 
-# Kompletná aktualizácia
+# Kompletní aktualizace do zadané složky
 python main.py --preset komplet --path "C:\IDOS"
 
-# Bezobslužná aktualizácia pre Windows Plánovač úloh (Task Scheduler)
+# Bezobslužná aktualizace pro Plánovač úloh (Task Scheduler)
 python main.py --preset quick --non-interactive --yes --kill-running
 ```
 
-#### Výber konkrétnych súborov:
+#### Výběr konkrétních souborů:
 ```bash
 python main.py --files TTAKT.ZIP VLAK26E.ZIP IDSJMK.ZIP --path "C:\IDOS"
 ```
 
 ---
 
-## 📂 Štruktúra projektu
+## 📂 Struktura projektu
 
 ```
-idos_updater/
+idos-updater/
 │
 ├── idos_updater/
-│   ├── __init__.py      # Verzia balíka a metadáta
-│   ├── __main__.py      # Štartovací bod balíka
-│   ├── core.py          # Logika sťahovania, parsovania CHAPS, extrakcie, zálohovania
-│   ├── cli.py           # Plnohodnotné CLI rozhranie s argumentmi
-│   └── gui.py           # Moderné okenné Tkinter rozhranie
+│   ├── __init__.py      # Verze balíčku a metadata
+│   ├── __main__.py      # Spouštěcí bod balíčku
+│   ├── core.py          # Logika stahování, parsování CHAPS, extrakce, zálohování
+│   ├── cli.py           # Plnohodnotné CLI rozhraní s argumenty
+│   └── gui.py           # Grafické okenní rozhraní v Tkinter
 │
-├── main.py              # Hlavný spúšťač (GUI alebo CLI podľa argumentov)
-├── run_gui.bat          # Dvojklikový spúšťač GUI pre Windows
-├── update_quick.bat     # Dvojklikový spúšťač rýchlej aktualizácie
-├── requirements.txt     # Informácie o závislostiach
-└── README.md            # Dokumentácia a návod
+├── main.py              # Hlavní spouštěč (GUI nebo CLI dle argumentů)
+├── run_gui.bat          # Spouštěč GUI pro Windows (dvojklik)
+├── update_quick.bat     # Spouštěč rychlé aktualizace pro Windows (dvojklik)
+├── test_updater.py      # Integrační a unit testy
+├── requirements.txt     # Informace o závislostech
+└── README.md            # Dokumentace a návod
 ```
 
 ---
 
 ## 📋 Dostupné presety
 
-| Kód presetu | Názov | Zahrnuté súbory |
+| Kód presetu | Název | Zahrnuté soubory |
 | :--- | :--- | :--- |
-| `quick` | ⚡ Rýchla aktualizácia | `TTAKT.ZIP`, `TTFONT.ZIP`, `VLAK26E.ZIP`, `VLAK26C.ZIP`, `BUS26C.ZIP`, `BUS26S.ZIP` |
-| `komplet` | 📦 Kompletná | `TTAKT.ZIP`, `TTFONT.ZIP`, `KOMPLET.ZIP` |
+| `quick` | ⚡ Rychlá aktualizace | `TTAKT.ZIP`, `TTFONT.ZIP`, `VLAK26E.ZIP`, `VLAK26C.ZIP`, `BUS26C.ZIP`, `BUS26S.ZIP` |
+| `komplet` | 📦 Kompletní | `TTAKT.ZIP`, `TTFONT.ZIP`, `KOMPLET.ZIP` |
 | `trains_buses` | 🚆 Vlaky & Autobusy | `VLAK26E.ZIP`, `VLAK26C.ZIP`, `VLAKPID26.ZIP`, `BUS26C.ZIP`, `BUS26CK.ZIP`, `BUS26CKD.ZIP`, `BUS26S.ZIP` |
-| `program_only`| ⚙️ Iba Program | `TTAKT.ZIP`, `TTFONT.ZIP` |
-| `all_individual` | 🌐 Všetko jednotlivo | Všetkých 200+ balíčkov vrátane všetkých MHD |
+| `program_only`| ⚙️ Pouze Program | `TTAKT.ZIP`, `TTFONT.ZIP` |
+| `all_individual` | 🌐 Vše jednotlivě | Všech 220+ balíčků včetně všech MHD měst |
 
 ---
 
-## ⚖️ Licenčné upozornenie
+## ⚖️ Licenční upozornění
 
-Data cestovných poriadkov sú autorským dielom spoločnosti **CHAPS spol. s r.o.** a sú určené pre držiteľov príslušných licencií k softvéru IDOS.
+Data jízdních řádů jsou autorským dílem společnosti **CHAPS spol. s r.o.** a jsou určena pro držitele příslušných licencí k softwaru IDOS.

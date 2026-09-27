@@ -1,2 +1,2 @@
-# IDOS Updater vyuziva vylucne standardne kniznice Pythonu (tkinter, urllib, zipfile, json, re, html).
-# Ziadne dalsie externe pip zavislosti nie su vyzadovane.
+# IDOS Updater vyuziva vyhradne standardni knihovny Pythonu (tkinter, urllib, zipfile, json, re, html).
+# Zadné dalsi externi pip zavislosti nejsou vyzadovany.
