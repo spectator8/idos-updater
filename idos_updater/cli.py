@@ -202,6 +202,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="IDOS Updater - Automatická aktualizace aplikace a dat IDOS CHAPS."
     )
+    parser.add_argument("--web", action="store_true", help="Spustí lokální webové rozhraní")
     parser.add_argument("--path", "-p", help="Cesta k instalaci IDOS (např. C:\\IDOS)")
     parser.add_argument("--list", "-l", action="store_true", help="Zobrazí všechny dostupné aktualizace")
     parser.add_argument("--search", "-s", help="Vyhledá aktualizace podle klíčového slova (např. Brno, Vlaky)")
