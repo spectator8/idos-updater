@@ -1,7 +1,8 @@
 """
 Jádro aplikace IDOS Updater.
 Obsahuje třídy pro stahování seznamu aktualizací z chaps.cz,
-správu prostředí IDOS, porovnávání verzí/dat souborů, zálohování, stahování archivů a jejich extrakci.
+správu prostředí IDOS, porovnávání verzí/dat souborů, manifest instalovaných balíčků,
+zálohování, stahování archivů a detailní hlášení chyb při extrakci.
 """
 
 import os
@@ -16,13 +17,15 @@ import urllib.error
 import html
 import re
 import datetime
+import traceback
 from dataclasses import dataclass, asdict
-from typing import List, Dict, Optional, Callable, Tuple, Set
+from typing import List, Dict, Optional, Callable, Tuple, Set, Any
 from pathlib import Path
 
 
 CHAPS_URL = "https://www.chaps.cz/cs/download/idos"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 IDOSUpdater/1.0"
+MANIFEST_FILENAME = "_installed_manifest.json"
 
 
 def parse_date(date_str: str) -> datetime.date:
@@ -64,31 +67,44 @@ class UpdateItem:
     def parsed_date(self) -> datetime.date:
         return parse_date(self.date)
 
-    def get_target_filenames(self) -> List[str]:
-        """Vrátí seznam názvů souborů, které tento balíček instaluje/aktualizuje."""
-        targets = []
+    def get_target_signatures(self) -> Tuple[List[str], List[str]]:
+        """
+        Vrátí (seznam_souborů, seznam_složek), které tento balíček typicky instaluje.
+        Používá se pro spolehlivou detekci přítomnosti balíčku na disku.
+        """
+        files = []
+        dirs = []
         fn_upper = self.filename.upper()
-        if fn_upper in ("TTAKT.ZIP", "TTOLD.ZIP"):
-            return ["tt.exe", "tt.dll", "ttc.dll"]
-        if fn_upper == "TTFONT.ZIP":
-            return ["tt.ttf"]
-        if fn_upper == "KOMPLET.ZIP":
-            return ["vlak26e.tt", "bus26c.tt", "vlak26c.tt"]
-
-        # Hledání názvů souborů z popisu (např. Aktualizuje soubor Vlak26E.tt)
-        found = re.findall(r'([A-Za-z0-9_]+\.(?:tt|exe|dll|ttf|map|tar|ttr|prt|chm))', self.description, re.IGNORECASE)
-        for f in found:
-            targets.append(f.lower())
-
-        # Základní název balíčku s různými příponami
         base = self.filename.rsplit('.', 1)[0].lower()
-        targets.append(f"{base}.tt")
-        targets.append(f"{base}.tar")
-        targets.append(f"{base}.map")
-        targets.append(f"{base}.ttr")
+
+        if fn_upper in ("TTAKT.ZIP", "TTOLD.ZIP"):
+            files.extend(["tt.exe", "tt.dll", "ttc.dll"])
+        elif fn_upper == "TTFONT.ZIP":
+            files.extend(["tt.ttf", "instfont.exe"])
+        elif fn_upper == "KOMPLET.ZIP":
+            files.extend(["vlak26e.tt", "bus26c.tt", "vlak26c.tt"])
+        elif fn_upper in ("C1.ZIP", "C2.ZIP", "CODIS.ZIP", "CPID.ZIP"):
+            dirs.append(base)
+
+        # Hledání všech možných přípon z popisu (.tt, .ttm, .ttr, .tar, .map, .exe, .dll, atd.)
+        found = re.findall(r'([A-Za-z0-9_]+\.(?:tt[mr]?|exe|dll|ttf|map|tar|prt|chm|ini|txt|htm|html))', self.description, re.IGNORECASE)
+        for f in found:
+            files.append(f.lower())
+
+        # Standardní varianty přípon pro základní název
+        for ext in (".tt", ".ttm", ".ttr", ".tar", ".map"):
+            files.append(f"{base}{ext}")
+            if base.endswith('_m'):
+                files.append(f"{base[:-2]}.ttm")
+                files.append(f"{base[:-2]}.map")
+            if base.endswith('_p'):
+                files.append(f"{base[:-2]}.tar")
+                files.append(f"{base[:-2]}.ttr")
 
         # Odstranění duplicit se zachováním pořadí
-        return list(dict.fromkeys(targets))
+        clean_files = list(dict.fromkeys(files))
+        clean_dirs = list(dict.fromkeys(dirs))
+        return clean_files, clean_dirs
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -114,6 +130,40 @@ def decode_chaps_text(text: str) -> str:
     return text
 
 
+class ManifestManager:
+    """Spravuje JSON manifest nainstalovaných balíčků v cílové složce IDOS."""
+
+    @classmethod
+    def get_manifest_path(cls, idos_path: str) -> str:
+        return os.path.join(idos_path, MANIFEST_FILENAME)
+
+    @classmethod
+    def load_manifest(cls, idos_path: str) -> Dict[str, Any]:
+        p = cls.get_manifest_path(idos_path)
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Chyba při čtení manifestu: {e}")
+        return {}
+
+    @classmethod
+    def record_installation(cls, idos_path: str, item: UpdateItem, extracted_files: List[str]):
+        manifest = cls.load_manifest(idos_path)
+        manifest[item.filename.upper()] = {
+            "date": item.date,
+            "installed_at": datetime.datetime.now().isoformat(),
+            "files": [os.path.relpath(f, idos_path) for f in extracted_files]
+        }
+        p = cls.get_manifest_path(idos_path)
+        try:
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Chyba při zápisu manifestu: {e}")
+
+
 class ChapsScraper:
     """Stahuje a zpracovává seznam dostupných aktualizací z chaps.cz."""
 
@@ -121,12 +171,10 @@ class ChapsScraper:
         self.url = url
 
     def parse_size_bytes(self, size_str: str) -> int:
-        """Převede např. '1.975.168 B' nebo '76.850 B' na celé číslo bajtů."""
         clean = re.sub(r'[^\d]', '', size_str)
         return int(clean) if clean else 0
 
     def fetch_updates(self, timeout: int = 20) -> List[UpdateItem]:
-        """Stáhne webovou stránku a vrátí seznam položek."""
         req = urllib.request.Request(
             self.url,
             headers={
@@ -148,7 +196,6 @@ class ChapsScraper:
         current_section = "Všeobecné"
         current_subsection = ""
 
-        # Hledáme h3, h4 a productListItem
         pattern = re.compile(
             r'(<h3[^>]*>.*?</h3>|<h4[^>]*>.*?</h4>|<div class="productListItem">.*?</div>\s*</div>)',
             re.DOTALL | re.IGNORECASE
@@ -159,7 +206,6 @@ class ChapsScraper:
             if block.startswith('<h3') or block.startswith('<H3'):
                 raw_title = re.sub(r'<[^>]+>', '', block).strip()
                 title = html.unescape(raw_title)
-                # Ignorujeme informační hlavičky na začátku
                 if title and not any(title.startswith(ignore) for ignore in [
                     'Důležité', 'Obsah', 'Postup', 'Upozornění', 'Poznámka', 'Důležitá', 'Navigace', 'Nabídka'
                 ]):
@@ -169,21 +215,18 @@ class ChapsScraper:
                 raw_sub = re.sub(r'<[^>]+>', '', block).strip()
                 current_subsection = html.unescape(raw_sub)
             elif 'productListItem' in block:
-                # Odkaz ke stažení
                 link_m = re.search(r'href=["\'](https?://[^"\']+\.ZIP)["\']', block, re.IGNORECASE)
                 if not link_m:
                     continue
                 download_url = link_m.group(1)
                 filename = download_url.split('/')[-1]
 
-                # Název
                 title_m = re.search(r'<h2[^>]*>(.*?)</h2>', block, re.DOTALL | re.IGNORECASE)
                 title_val = ""
                 if title_m:
                     raw_h2 = re.sub(r'<[^>]+>', '', title_m.group(1))
                     title_val = html.unescape(raw_h2).replace('více informací', '').replace('vice informaci', '').strip()
 
-                # Popis
                 desc_m = re.search(r'<p><strong>(.*?)</strong>(.*?)<p>Datum', block, re.DOTALL | re.IGNORECASE)
                 if not desc_m:
                     desc_m = re.search(r'<p><strong>(.*?)</strong>', block, re.DOTALL | re.IGNORECASE)
@@ -197,11 +240,9 @@ class ChapsScraper:
                 if extra_desc:
                     full_desc = f"{main_desc} ({extra_desc})"
 
-                # Datum aktualizace
                 date_m = re.search(r'Datum aktualizace:\s*<strong>([^<]+)</strong>', block, re.IGNORECASE)
                 date_val = date_m.group(1).strip() if date_m else ""
 
-                # Velikost
                 size_m = re.search(r'velikost:\s*<strong>([^<]+)</strong>', block, re.IGNORECASE)
                 size_val = size_m.group(1).strip() if size_m else ""
                 size_bytes = self.parse_size_bytes(size_val)
@@ -243,20 +284,36 @@ class IdosEnvironment:
         return None
 
     @classmethod
-    def scan_local_files(cls, idos_path: str) -> Dict[str, Tuple[str, datetime.date]]:
+    def scan_local_files(cls, idos_path: str) -> Dict[str, Any]:
         """
-        Prohledá složku IDOS a vrátí mapu:
-        { 'vlak26e.tt': (plná_cesta, datum_poslední_úpravy), ... }
+        Prohledá složku IDOS a vrátí strukturu:
+        {
+          'files': { 'vlak26e.tt': (plná_cesta, datetime.date), ... },
+          'dirs': { 'c1': (plná_cesta, datetime.date), ... },
+          'manifest': { 'PLZEN_M.ZIP': { 'date': '1.9.2026', ... } }
+        }
         """
         files_map: Dict[str, Tuple[str, datetime.date]] = {}
+        dirs_map: Dict[str, Tuple[str, datetime.date]] = {}
+        manifest = {}
+
         if not idos_path or not os.path.isdir(idos_path):
-            return files_map
+            return {'files': files_map, 'dirs': dirs_map, 'manifest': manifest}
+
+        manifest = ManifestManager.load_manifest(idos_path)
 
         try:
-            for root, _, filenames in os.walk(idos_path):
-                # Ignorujeme zálohy
+            for root, dirnames, filenames in os.walk(idos_path):
                 if "_backups" in root or "backups" in root:
                     continue
+                for d in dirnames:
+                    full_d = os.path.join(root, d)
+                    try:
+                        mtime = os.path.getmtime(full_d)
+                        dt = datetime.date.fromtimestamp(mtime)
+                        dirs_map[d.lower()] = (full_d, dt)
+                    except Exception:
+                        pass
                 for fn in filenames:
                     full_p = os.path.join(root, fn)
                     try:
@@ -268,29 +325,59 @@ class IdosEnvironment:
         except Exception as e:
             print(f"Chyba při skenování lokálních souborů: {e}")
 
-        return files_map
+        return {'files': files_map, 'dirs': dirs_map, 'manifest': manifest}
 
     @classmethod
-    def get_item_update_status(cls, item: UpdateItem, local_files_map: Dict[str, Tuple[str, datetime.date]]) -> Tuple[str, str, Optional[str]]:
-        """
-        Vrátí stav balíčku:
-        - ('outdated', '🟠 Vyžaduje aktualizaci', '20.9.2025')
-        - ('up_to_date', '🟢 Aktuální', '25.9.2026')
-        - ('not_installed', '⚪ Nenainstalováno', None)
-        """
-        targets = item.get_target_filenames()
+    def get_item_update_status(cls, item: UpdateItem, scan_result: Dict[str, Any], log_callback: Optional[Callable[[str], None]] = None) -> Tuple[str, str, Optional[str]]:
+        """Vrátí stav balíčku.
+
+        Now checks *all* files listed in the manifest and logs the matching
+        filenames (only when a logger is supplied)."""
+        files_map = scan_result.get('files', {})
+        dirs_map = scan_result.get('dirs', {})
+        manifest = scan_result.get('manifest', {})
+
         item_date = item.parsed_date
+        fn_key = item.filename.upper()
+
+        # 1️⃣ Manifest check – any file from the manifest must exist (case‑insensitive)
+        if fn_key in manifest:
+            record = manifest[fn_key]
+            rec_date_str = record.get("date", "")
+            rec_date = parse_date(rec_date_str) if rec_date_str else None
+            rec_files = record.get("files", [])
+
+            # verify existence (case‑insensitive)
+            existing = [
+                f for f in rec_files
+                if os.path.basename(f).lower() in files_map
+            ]
+            if log_callback:
+                log_callback(
+                    f"🔎 Manifest check for {fn_key}: {len(existing)}/{len(rec_files)} files present"
+                )
+            if existing:
+                if rec_date and item_date > rec_date:
+                    return ("outdated", "🟠 Vyžaduje aktualizaci", rec_date_str)
+                return ("up_to_date", "🟢 Aktuální", rec_date_str or item.date)
+
+        # 2️⃣ Signature‑based detection
+        file_targets, dir_targets = item.get_target_signatures()
 
         found_dates = []
-        for tgt in targets:
-            if tgt in local_files_map:
-                _, local_dt = local_files_map[tgt]
+        for tgt in file_targets:
+            if tgt in files_map:
+                _, local_dt = files_map[tgt]
+                found_dates.append(local_dt)
+
+        for d_tgt in dir_targets:
+            if d_tgt in dirs_map:
+                _, local_dt = dirs_map[d_tgt]
                 found_dates.append(local_dt)
 
         if not found_dates:
             return ("not_installed", "⚪ Nenainstalováno", None)
 
-        # Nejnovější datum nalezeného lokálního souboru
         latest_local_dt = max(found_dates)
         local_date_str = f"{latest_local_dt.day}.{latest_local_dt.month}.{latest_local_dt.year}"
 
@@ -416,7 +503,7 @@ class BackupManager:
 
 
 class UpdateManager:
-    """Řídí proces stahování a extrakce balíčků."""
+    """Řídí proces stahování a extrakce balíčků s podrobným hlášením chyb."""
 
     def __init__(self, idos_path: str):
         self.idos_path = idos_path
@@ -430,7 +517,7 @@ class UpdateManager:
     ) -> Tuple[int, int, List[str]]:
         """
         Stáhne a rozbalí vybrané položky.
-        Vrátí: (úspěšné_položky, chybné_položky, seznam_chyb)
+        Vrátí: (úspěšné_položky, chybné_položky, seznam_detailních_chyb)
         """
         os.makedirs(self.idos_path, exist_ok=True)
         success_count = 0
@@ -448,18 +535,17 @@ class UpdateManager:
                 log_callback(f"[{idx}/{total_items}] Stahuji {item.filename} ({item.size_str}) - {item.title} ...")
 
             try:
-                # Stahování
                 req = urllib.request.Request(item.url, headers={"User-Agent": USER_AGENT})
                 start_time = time.time()
                 downloaded = 0
                 chunks = []
 
-                with urllib.request.urlopen(req, timeout=30) as resp:
+                with urllib.request.urlopen(req, timeout=35) as resp:
                     total_bytes = int(resp.headers.get('content-length', item.size_bytes or 0))
                     while True:
                         if cancel_check and cancel_check():
                             break
-                        chunk = resp.read(65536) # 64 KB chunk
+                        chunk = resp.read(65536)
                         if not chunk:
                             break
                         chunks.append(chunk)
@@ -477,25 +563,54 @@ class UpdateManager:
                 if log_callback:
                     log_callback(f"Rozbaluji {item.filename} do {self.idos_path} ...")
 
-                # Extrakce
-                self._extract_zip(item.filename, zip_data, log_callback)
+                # Extrakce a zápis
+                extracted_files = self._extract_zip(item.filename, zip_data, log_callback)
+
+                # Záznam do manifestu
+                ManifestManager.record_installation(self.idos_path, item, extracted_files)
+
                 success_count += 1
                 if log_callback:
-                    log_callback(f"✓ {item.filename} úspěšně nainstalován.")
+                    log_callback(f"✓ {item.filename} úspěšně nainstalován ({len(extracted_files)} souborů).")
 
-            except Exception as e:
+            except urllib.error.HTTPError as he:
                 error_count += 1
-                err_msg = f"Chyba při instalaci {item.filename}: {e}"
+                err_msg = f"Chyba sítě u {item.filename}: HTTP {he.code} ({he.reason}) na adrese {item.url}"
                 errors.append(err_msg)
                 if log_callback:
-                    log_callback(f"✗ {err_msg}")
+                    log_callback(f"❌ {err_msg}")
+            except urllib.error.URLError as ue:
+                error_count += 1
+                err_msg = f"Chyba připojení u {item.filename}: {ue.reason}"
+                errors.append(err_msg)
+                if log_callback:
+                    log_callback(f"❌ {err_msg}")
+            except PermissionError as pe:
+                error_count += 1
+                err_msg = f"Přístup odepřen při zápisu {item.filename} ({pe}). Soubor je pravděpodobně uzamčen běžícím programem IDOS (TT.exe)."
+                errors.append(err_msg)
+                if log_callback:
+                    log_callback(f"❌ {err_msg}")
+            except zipfile.BadZipFile:
+                error_count += 1
+                err_msg = f"Poškozený archiv {item.filename} (stažený soubor není platný ZIP)."
+                errors.append(err_msg)
+                if log_callback:
+                    log_callback(f"❌ {err_msg}")
+            except Exception as e:
+                error_count += 1
+                err_msg = f"Neočekávaná chyba u {item.filename}: {type(e).__name__} - {e}"
+                errors.append(err_msg)
+                if log_callback:
+                    log_callback(f"❌ {err_msg}\n    {traceback.format_exc()}")
 
         return success_count, error_count, errors
 
-    def _extract_zip(self, filename: str, zip_data: bytes, log_callback: Optional[Callable[[str], None]] = None):
-        """Rozbalí ZIP archiv a správně ošetří speciální cesty jako TTAKT (App/ -> root)."""
+    def _extract_zip(self, filename: str, zip_data: bytes, log_callback: Optional[Callable[[str], None]] = None) -> List[str]:
+        """Rozbalí ZIP archiv a vrátí seznam plných cest všech extrahovaných souborů."""
         import io
         is_ttakt = (filename.upper() == "TTAKT.ZIP")
+        extracted_paths = []
 
         with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
             for member in z.infolist():
@@ -503,11 +618,10 @@ class UpdateManager:
                     continue
 
                 member_name = member.filename
-                # Odstranění ./ na začátku
                 if member_name.startswith("./") or member_name.startswith(".\\"):
                     member_name = member_name[2:]
 
-                # Speciální pravidlo pro TTAKT.ZIP: CHAPS ukládá soubory do složky App/,
+                # Špeciální pravidlo pro TTAKT.ZIP: CHAPS ukládá soubory do složky App/,
                 # ale patří přímo do kořenové složky IDOS!
                 if is_ttakt:
                     if member_name.lower().startswith("app/") or member_name.lower().startswith("app\\"):
@@ -517,9 +631,12 @@ class UpdateManager:
                 target_dir = os.path.dirname(target_file_path)
                 os.makedirs(target_dir, exist_ok=True)
 
-                # Bezpečný zápis souboru
                 with z.open(member) as source_f, open(target_file_path, "wb") as dest_f:
                     shutil.copyfileobj(source_f, dest_f)
+
+                extracted_paths.append(target_file_path)
+
+        return extracted_paths
 
 
 # Přednastavené sady aktualizací (Presety)
