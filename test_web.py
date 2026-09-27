@@ -3,11 +3,13 @@
 import http.client
 import json
 import os
+import re
 import tempfile
 import threading
 import time
 import unittest
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import patch
 
 from idos_updater.core import ConfigManager, UpdateItem, UpdateManager
@@ -41,8 +43,15 @@ class WebInterfaceTests(unittest.TestCase):
                 time.sleep(0.01)
             self.assertEqual(self.app.refresh_state, "ready")
         self.token = "test-token"
+        self.static_root = Path(self.temp_dir.name) / "web_dist"
+        self.static_root.mkdir()
+        (self.static_root / "index.html").write_text(
+            '<meta name="csrf-token" content="__CSRF_TOKEN__"><title>IDOS Updater</title>',
+            encoding="utf-8",
+        )
+        (self.static_root / "app.js").write_text("console.log('web app');", encoding="utf-8")
         self.server = ThreadingHTTPServer(
-            ("127.0.0.1", 0), make_handler(self.app, self.token)
+            ("127.0.0.1", 0), make_handler(self.app, self.token, self.static_root)
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -80,6 +89,56 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(b'name="csrf-token" content="test-token"', body)
         self.assertIn(b"IDOS Updater", body)
+
+    def test_static_assets_are_served_and_traversal_is_blocked(self):
+        status, body = self.request("GET", "/app.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"console.log", body)
+        status, _ = self.request("GET", "/%2e%2e/config.json")
+        self.assertEqual(status, 404)
+
+    def test_built_frontend_and_hashed_assets_are_served(self):
+        frontend_root = Path(__file__).parent / "idos_updater" / "web_dist"
+        server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), make_handler(self.app, self.token, frontend_root)
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", server.server_port, timeout=2
+            )
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            html = response.read().decode("utf-8")
+            self.assertEqual(response.status, 200)
+            self.assertIn('content="test-token"', html)
+            asset_paths = re.findall(r'(?:src|href)="([^"]+\.(?:js|css))"', html)
+            self.assertGreaterEqual(len(asset_paths), 2)
+
+            for asset_path in asset_paths:
+                connection.request("GET", asset_path)
+                asset_response = connection.getresponse()
+                self.assertEqual(asset_response.status, 200, asset_path)
+                self.assertGreater(len(asset_response.read()), 0)
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_csrf_bootstrap_rejects_foreign_origins(self):
+        status, _ = self.request(
+            "GET",
+            "/api/csrf",
+            headers={"Origin": "http://evil.example"},
+        )
+        self.assertEqual(status, 403)
+
+    def test_csrf_bootstrap_returns_the_session_token(self):
+        status, body = self.request("GET", "/api/csrf")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["csrf_token"], self.token)
 
     def test_selection_endpoint_requires_csrf_token(self):
         status, _ = self.request("POST", "/api/selection", {"filenames": []})

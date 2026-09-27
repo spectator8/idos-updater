@@ -1,6 +1,7 @@
 """Lokální webové rozhraní pro IDOS Updater."""
 
 import json
+import mimetypes
 import os
 import secrets
 import threading
@@ -8,7 +9,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from idos_updater.core import (
     BackupManager,
@@ -334,9 +335,12 @@ class WebApplication:
             }
 
 
-def make_handler(app: WebApplication, token: str):
-    html_path = Path(__file__).with_name("web_ui.html")
-    page = html_path.read_text(encoding="utf-8").replace("__CSRF_TOKEN__", token)
+def make_handler(
+    app: WebApplication,
+    token: str,
+    static_root: Optional[Path] = None,
+):
+    frontend_root = (static_root or Path(__file__).with_name("web_dist")).resolve()
 
     class RequestHandler(BaseHTTPRequestHandler):
         server_version = "IDOSUpdaterWeb/1.0"
@@ -365,11 +369,48 @@ def make_handler(app: WebApplication, token: str):
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-                "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+                "base-uri 'none'; frame-ancestors 'none'",
             )
             self.end_headers()
             self.wfile.write(body)
+
+        def _origin_matches_host(self) -> bool:
+            origin = self.headers.get("Origin")
+            if not origin:
+                return True
+            parsed_origin = urlsplit(origin)
+            return (
+                parsed_origin.scheme == "http"
+                and parsed_origin.netloc.lower()
+                == self.headers.get("Host", "").lower()
+            )
+
+        def _serve_static(self, request_path: str) -> None:
+            relative_path = unquote(request_path).lstrip("/") or "index.html"
+            try:
+                file_path = (frontend_root / relative_path).resolve(strict=True)
+                if os.path.commonpath((str(frontend_root), str(file_path))) != str(frontend_root):
+                    self._send_json(404, {"error": "Soubor nebyl nalezen."})
+                    return
+            except (OSError, ValueError):
+                self._send_json(404, {"error": "Soubor nebyl nalezen."})
+                return
+
+            if not file_path.is_file():
+                self._send_json(404, {"error": "Soubor nebyl nalezen."})
+                return
+
+            body = file_path.read_bytes()
+            if file_path.name == "index.html":
+                body = body.replace(b"__CSRF_TOKEN__", token.encode("ascii"))
+            content_type, _ = mimetypes.guess_type(str(file_path))
+            self._send(
+                200,
+                body,
+                "{}; charset=utf-8".format(content_type or "application/octet-stream"),
+            )
 
         def _send_json(self, status: int, value: Dict[str, Any]) -> None:
             body = json.dumps(value, ensure_ascii=False).encode("utf-8")
@@ -407,23 +448,24 @@ def make_handler(app: WebApplication, token: str):
                 return False
             if not secrets.compare_digest(self.headers.get("X-IDO-CSRF-Token", ""), token):
                 return False
-            origin = self.headers.get("Origin")
-            if origin:
-                parsed_origin = urlsplit(origin)
-                if parsed_origin.scheme != "http" or parsed_origin.netloc.lower() != self.headers.get("Host", "").lower():
-                    return False
-            return True
+            return self._origin_matches_host()
 
         def do_GET(self):
             if not self._local_host_is_valid():
                 self._send_json(403, {"error": "Přístup je povolen pouze z tohoto počítače."})
                 return
-            if self.path == "/":
-                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
-            elif self.path == "/api/state":
+            request_path = urlsplit(self.path).path
+            if request_path == "/api/csrf":
+                if not self._origin_matches_host():
+                    self._send_json(403, {"error": "Původ požadavku není povolen."})
+                    return
+                self._send_json(200, {"csrf_token": token})
+            elif request_path == "/api/state":
                 self._send_json(200, app.get_state())
-            else:
+            elif request_path.startswith("/api/"):
                 self._send_json(404, {"error": "Cesta nebyla nalezena."})
+            else:
+                self._serve_static(request_path)
 
         def do_POST(self):
             if not self._is_authorized_post():
@@ -470,9 +512,22 @@ def make_handler(app: WebApplication, token: str):
 
 
 def run_web(idos_path: Optional[str] = None) -> None:
+    static_root = Path(__file__).with_name("web_dist").resolve()
+    if not (static_root / "index.html").is_file():
+        raise FileNotFoundError(
+            "Web frontend není sestaven. Spusťte `npm ci` a `npm run build` ve složce web_client."
+        )
     app = WebApplication(idos_path)
     token = secrets.token_urlsafe(32)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app, token))
+    try:
+        port = int(os.environ.get("IDOS_WEB_PORT", "0"))
+    except ValueError as exc:
+        raise ValueError("IDOS_WEB_PORT musí být číslo portu.") from exc
+    if not 0 <= port <= 65535:
+        raise ValueError("IDOS_WEB_PORT musí být mezi 0 a 65535.")
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", port), make_handler(app, token, static_root)
+    )
     server.daemon_threads = True
     url = "http://127.0.0.1:{}/".format(server.server_port)
     print("IDOS Updater webové rozhraní: {}".format(url))
