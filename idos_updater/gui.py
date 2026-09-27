@@ -112,8 +112,6 @@ class IdosUpdaterGUI(tk.Tk):
 
         ttk.Button(preset_btn_frame, text="⚡ Označit vyžadující aktualizaci", style="Preset.TButton",
                    command=self._select_outdated_only).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preset_btn_frame, text="⚪ Označit nenainstalované", style="Preset.TButton",
-                   command=self._select_not_installed).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_btn_frame, text="⚡ Rychlá (Program + Vlaky + Busy)", style="Preset.TButton",
                    command=lambda: self._apply_preset("quick")).pack(side=tk.LEFT, padx=2)
         ttk.Button(preset_btn_frame, text="📦 Kompletní (KOMPLET + Program)", style="Preset.TButton",
