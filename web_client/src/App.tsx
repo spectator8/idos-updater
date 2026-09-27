@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
+  ArrowDown,
   ArrowDownToLine,
+  ArrowUp,
   Check,
   CheckCheck,
   ChevronDown,
@@ -36,6 +38,7 @@ import {
 import { cn } from "@/lib/utils"
 
 type PackageStatus = "outdated" | "up_to_date" | "not_installed"
+type SortColumn = "package" | "category" | "status" | "date" | "size"
 type RequestAction =
   | "outdated"
   | "not_installed"
@@ -94,6 +97,11 @@ interface ApiResponse extends Partial<AppState> {
   csrf_token?: string
 }
 
+interface SortState {
+  column: SortColumn
+  direction: "asc" | "desc"
+}
+
 const actionLabels: { action: RequestAction; label: string }[] = [
   { action: "outdated", label: "Zastaralé" },
   { action: "not_installed", label: "Nenainstalované" },
@@ -123,6 +131,25 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`
 }
 
+function parsePackageDate(value: string) {
+  const match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value.trim())
+  if (!match) return null
+  const [, dayText, monthText, yearText] = match
+  const day = Number(dayText)
+  const month = Number(monthText)
+  const year = Number(yearText)
+  const timestamp = Date.UTC(year, month - 1, day)
+  const parsed = new Date(timestamp)
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return timestamp
+}
+
 function StatusBadge({ item }: { item: PackageItem }) {
   const variant =
     item.status === "outdated"
@@ -131,6 +158,88 @@ function StatusBadge({ item }: { item: PackageItem }) {
         ? "success"
         : "secondary"
   return <Badge variant={variant}>{item.status_label}</Badge>
+}
+
+function SortableHeader({
+  column,
+  label,
+  sort,
+  onSort,
+  alignRight = false,
+}: {
+  column: SortColumn
+  label: string
+  sort: SortState | null
+  onSort: (column: SortColumn) => void
+  alignRight?: boolean
+}) {
+  const active = sort?.column === column
+  const Icon = active
+    ? sort.direction === "asc"
+      ? ArrowUp
+      : ArrowDown
+    : null
+
+  return (
+    <th
+      aria-sort={
+        active
+          ? sort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      className={cn("px-3 py-2.5 font-medium", alignRight && "text-right")}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "-mx-2 h-7 text-xs text-muted-foreground hover:text-foreground",
+          alignRight && "flex-row-reverse",
+        )}
+        onClick={() => onSort(column)}
+      >
+        {label}
+        {Icon ? <Icon className="size-3.5" /> : <span className="size-3.5" aria-hidden />}
+      </Button>
+    </th>
+  )
+}
+
+function comparePackageItems(
+  left: PackageItem,
+  right: PackageItem,
+  column: SortColumn,
+  locale: Intl.Collator,
+) {
+  switch (column) {
+    case "package":
+      return (
+        locale.compare(left.title || left.filename, right.title || right.filename) ||
+        locale.compare(left.filename, right.filename)
+      )
+    case "category":
+      return locale.compare(left.category, right.category)
+    case "status": {
+      const order: Record<PackageStatus, number> = {
+        outdated: 0,
+        not_installed: 1,
+        up_to_date: 2,
+      }
+      return order[left.status] - order[right.status]
+    }
+    case "date": {
+      const leftDate = parsePackageDate(left.date)
+      const rightDate = parsePackageDate(right.date)
+      if (leftDate === null) return rightDate === null ? 0 : 1
+      if (rightDate === null) return -1
+      return leftDate - rightDate
+    }
+    case "size":
+      return left.size_bytes - right.size_bytes
+  }
 }
 
 function StatCard({
@@ -177,6 +286,7 @@ export default function App() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [sort, setSort] = useState<SortState | null>(null)
   const [presetValue, setPresetValue] = useState("")
   const [notice, setNotice] = useState("")
   const [noticeError, setNoticeError] = useState(false)
@@ -292,7 +402,7 @@ export default function App() {
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("cs")
-    return (appState?.items ?? []).filter((item) => {
+    const filtered = (appState?.items ?? []).filter((item) => {
       const searchable =
         `${item.filename} ${item.title} ${item.description} ${item.category}`.toLocaleLowerCase(
           "cs",
@@ -303,7 +413,41 @@ export default function App() {
         (statusFilter === "all" || item.status === statusFilter)
       )
     })
-  }, [appState, category, search, statusFilter])
+    if (!sort) return filtered
+
+    const collator = new Intl.Collator("cs", {
+      numeric: true,
+      sensitivity: "base",
+    })
+    const originalOrder = new Map(
+      (appState?.items ?? []).map((item, index) => [item.filename, index]),
+    )
+    const direction = sort.direction === "asc" ? 1 : -1
+    return filtered.toSorted((left, right) => {
+      const comparison = comparePackageItems(left, right, sort.column, collator)
+      if (sort.column === "date") {
+        const leftDate = parsePackageDate(left.date)
+        const rightDate = parsePackageDate(right.date)
+        if (leftDate === null && rightDate !== null) return 1
+        if (leftDate !== null && rightDate === null) return -1
+        if (leftDate === null && rightDate === null) {
+          return originalOrder.get(left.filename)! - originalOrder.get(right.filename)!
+        }
+      }
+      return (
+        comparison * direction ||
+        originalOrder.get(left.filename)! - originalOrder.get(right.filename)!
+      )
+    })
+  }, [appState, category, search, sort, statusFilter])
+
+  const changeSort = (column: SortColumn) => {
+    setSort((current) =>
+      current?.column === column
+        ? { column, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { column, direction: "asc" },
+    )
+  }
 
   const isLoading = appState?.refresh_state === "loading"
   const isUpdating = appState?.update_state === "running"
@@ -608,16 +752,17 @@ export default function App() {
 
               <div className="overflow-hidden rounded-xl border">
                 <div className="max-h-[540px] overflow-auto">
-                  <table className="w-full min-w-[680px] text-left text-sm">
+                  <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/90 text-xs text-muted-foreground backdrop-blur">
                       <tr>
                         <th className="w-10 px-3 py-2.5 font-medium">
                           <span className="sr-only">Výběr</span>
                         </th>
-                        <th className="px-3 py-2.5 font-medium">Balíček</th>
-                        <th className="px-3 py-2.5 font-medium">Stav</th>
-                        <th className="px-3 py-2.5 font-medium">Aktualizace</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Velikost</th>
+                        <SortableHeader column="package" label="Balíček" sort={sort} onSort={changeSort} />
+                        <SortableHeader column="category" label="Kategorie" sort={sort} onSort={changeSort} />
+                        <SortableHeader column="status" label="Stav" sort={sort} onSort={changeSort} />
+                        <SortableHeader column="date" label="Aktualizace" sort={sort} onSort={changeSort} />
+                        <SortableHeader column="size" label="Velikost" sort={sort} onSort={changeSort} alignRight />
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -642,9 +787,10 @@ export default function App() {
                             </div>
                             <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                               <span className="font-mono">{item.filename}</span>
-                              <span aria-hidden>·</span>
-                              <span className="truncate">{item.category}</span>
                             </div>
+                          </td>
+                          <td className="max-w-[220px] truncate px-3 py-3 text-xs text-muted-foreground" title={item.category}>
+                            {item.category || "—"}
                           </td>
                           <td className="px-3 py-3">
                             <StatusBadge item={item} />
@@ -660,7 +806,7 @@ export default function App() {
                       {!filteredItems.length && (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={6}
                             className="px-4 py-12 text-center text-sm text-muted-foreground"
                           >
                             {isLoading
