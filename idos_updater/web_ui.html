@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="__CSRF_TOKEN__">
+  <title>IDOS Updater</title>
+  <style>
+    :root { color-scheme: light; --ink:#172b3a; --muted:#607483; --line:#dce5e9; --blue:#087e8b; --blue-dark:#05636d; --paper:#fff; --bg:#f2f6f6; --green:#16754b; --amber:#9a5b00; --red:#a62e2e; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 "Segoe UI",system-ui,sans-serif }
+    header { background:linear-gradient(120deg,#073b4c,#087e8b); color:white; padding:24px max(20px,calc((100% - 1240px)/2)); }
+    header h1 { margin:0; font-size:1.6rem }
+    header p { margin:5px 0 0; opacity:.85 }
+    main { max-width:1240px; margin:22px auto; padding:0 18px 32px }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 2px 8px #1838470a }
+    .row { display:flex; align-items:center; flex-wrap:wrap; gap:10px }
+    .row + .row { margin-top:14px }
+    label { font-weight:600 }
+    input[type=text], select { font:inherit; color:inherit; border:1px solid #bccbd1; border-radius:7px; padding:9px 11px; background:white }
+    #path { flex:1; min-width:260px }
+    button { border:0; border-radius:7px; padding:9px 13px; background:#e7eff1; color:var(--ink); font:inherit; font-weight:600; font-size:.9rem; cursor:pointer }
+    button:hover { filter:brightness(.96) }
+    button:disabled { opacity:.55; cursor:wait }
+    .primary { color:white; background:var(--blue) }
+    .primary:hover { background:var(--blue-dark) }
+    .danger { color:white; background:var(--red) }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px }
+    .check { display:inline-flex; align-items:center; gap:7px; font-weight:500 }
+    .stats { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); margin-top:13px }
+    .stats strong { color:var(--ink) }
+    .notice { color:var(--muted); min-height:1.5em; margin-top:8px }
+    .status { font-weight:650 }
+    .status.outdated { color:var(--amber) } .status.up_to_date { color:var(--green) } .status.not_installed { color:var(--muted) }
+    .progress-head { display:flex; justify-content:space-between; gap:12px; align-items:center }
+    progress { display:block; width:100%; height:14px; margin:12px 0; accent-color:var(--blue) }
+    .filters { display:grid; grid-template-columns: minmax(180px,1fr) minmax(170px,240px) minmax(170px,240px); gap:10px }
+    .filters input, .filters select { width:100% }
+    .table-wrap { overflow:auto; max-height:58vh; border:1px solid var(--line); border-radius:8px; margin-top:14px }
+    table { width:100%; border-collapse:collapse; min-width:760px; background:white }
+    th { position:sticky; top:0; background:#edf3f4; text-align:left; z-index:1 }
+    th, td { padding:10px 11px; border-bottom:1px solid #e8eef0; vertical-align:top }
+    tbody tr:hover { background:#f7fbfb }
+    td.title { min-width:230px }
+    td.small { white-space:nowrap; color:var(--muted) }
+    .logs { margin:0; padding:10px 12px; max-height:190px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; border-radius:8px; background:#102530; color:#d8e6e9; font:12px/1.55 Consolas,monospace }
+    .section-title { margin:0 0 12px; font-size:1.05rem }
+    @media(max-width:700px) { header { padding:18px } main { margin-top:14px; padding:0 10px 20px } .panel { padding:14px } .filters { grid-template-columns:1fr } #path { min-width:100% } }
+  </style>
+</head>
+<body>
+  <header><h1>IDOS Updater</h1><p>Lokální webové rozhraní · data balíčků z CHAPS</p></header>
+  <main>
+    <section class="panel">
+      <h2 class="section-title">Cílová instalace</h2>
+      <div class="row">
+        <label for="path">Složka IDOS</label><input id="path" type="text" autocomplete="off">
+        <button id="autodetect">Autodetekce</button><button id="save">Uložit nastavení</button><button id="refresh">Obnovit balíčky</button>
+      </div>
+      <div class="row">
+        <label class="check"><input id="backup" type="checkbox"> Zálohovat před aktualizací</label>
+        <label class="check"><input id="auto-kill" type="checkbox"> Ukončit běžící IDOS</label>
+        <label class="check"><input id="launch" type="checkbox"> Spustit IDOS po aktualizaci</label>
+      </div>
+      <div id="notice" class="notice" role="status"></div>
+      <div id="stats" class="stats"></div>
+    </section>
+    <section class="panel">
+      <div class="progress-head"><h2 class="section-title">Aktualizace</h2><span id="update-status" class="status">Připraveno</span></div>
+      <progress id="progress" max="1" value="0"></progress>
+      <div id="progress-label" class="notice">Načítám stav…</div>
+      <div class="row">
+        <div class="toolbar">
+          <button data-action="outdated">Vybrat zastaralé</button>
+          <button data-action="not_installed">Vybrat nenainstalované</button>
+          <button data-action="quick">Rychlá aktualizace</button>
+          <button data-action="komplet">Kompletní</button>
+          <button data-action="trains_buses">Vlaky a autobusy</button>
+          <button data-action="program_only">Pouze program</button>
+          <button data-action="all_individual">Vše jednotlivě</button>
+          <button data-action="all">Vybrat vše</button>
+          <button data-action="clear">Zrušit výběr</button>
+        </div>
+      </div>
+      <div class="row">
+        <button id="update" class="primary">Aktualizovat vybrané</button>
+        <button id="cancel" class="danger" disabled>Zrušit aktualizaci</button>
+        <button id="launch-now">Spustit IDOS</button>
+      </div>
+    </section>
+    <section class="panel">
+      <h2 class="section-title">Dostupné balíčky</h2>
+      <div class="filters">
+        <input id="search" type="search" placeholder="Hledat název, soubor, popis…" aria-label="Hledat balíčky">
+        <select id="category"><option value="">Všechny kategorie</option></select>
+        <select id="status-filter">
+          <option value="">Všechny stavy</option><option value="outdated">Vyžaduje aktualizaci</option>
+          <option value="up_to_date">Aktuální</option><option value="not_installed">Nenainstalované</option>
+        </select>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Vybrat</th><th>Stav</th><th>Balíček</th><th>Kategorie</th><th>Datum</th><th>Velikost</th></tr></thead>
+        <tbody id="items"><tr><td colspan="6">Načítám balíčky…</td></tr></tbody>
+      </table></div>
+      <div id="selection-summary" class="notice"></div>
+    </section>
+    <section class="panel">
+      <h2 class="section-title">Protokol operací</h2>
+      <pre id="logs" class="logs" aria-live="polite"></pre>
+    </section>
+  </main>
+  <script>
+    const token = document.querySelector('meta[name="csrf-token"]').content;
+    const $ = id => document.getElementById(id);
+    let state = null;
+    let settingsDirty = false;
+    let selectionTimer = null;
+    async function request(url, data) {
+      const options = data === undefined ? {} : {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-IDO-CSRF-Token':token},
+        body: JSON.stringify(data)
+      };
+      const response = await fetch(url, options);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      return result;
+    }
+    function announce(message, error=false) {
+      $('notice').textContent = message || '';
+      $('notice').style.color = error ? '#a62e2e' : '';
+    }
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      const units=['B','KB','MB','GB']; let value=bytes, unit=0;
+      while (value>=1024 && unit<units.length-1) { value/=1024; unit++; }
+      return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+    }
+    async function saveSettings() {
+      const result = await request('/api/settings', {
+        path:$('path').value, create_backup:$('backup').checked,
+        auto_kill_idos:$('auto-kill').checked, launch_after_update:$('launch').checked
+      });
+      settingsDirty = false;
+      render(result.state);
+      announce('Nastavení uloženo.');
+    }
+    async function selectAction(action) {
+      const result = await request('/api/select-action', {action});
+      render(result.state);
+    }
+    async function updateSelection() {
+      const filenames = Array.from(document.querySelectorAll('#items input[type=checkbox]:checked')).map(box => box.value);
+      const result = await request('/api/selection', {filenames});
+      render(result.state);
+    }
+    function render(next) {
+      state = next;
+      if (!settingsDirty) {
+        $('path').value = next.path;
+        $('backup').checked = next.create_backup;
+        $('auto-kill').checked = next.auto_kill_idos;
+        $('launch').checked = next.launch_after_update;
+      }
+      const loading = next.refresh_state === 'loading';
+      const statusText = {loading:'Načítám nabídku…',ready:`Načteno ${next.items.length} balíčků`,error:`Chyba načítání: ${next.refresh_error}`};
+      if (next.refresh_state !== 'ready') announce(statusText[next.refresh_state] || 'Připraveno', next.refresh_state === 'error');
+      else if (next.idos_running) announce('IDOS (TT.exe) právě běží.');
+      else announce('');
+      const counts = {outdated:0,up_to_date:0,not_installed:0};
+      for (const item of next.items) counts[item.status] = (counts[item.status] || 0) + 1;
+      $('stats').replaceChildren();
+      for (const [label,value] of [['Vybráno',next.items.filter(item=>item.selected).length],['Vyžaduje aktualizaci',counts.outdated],['Aktuální',counts.up_to_date],['Nenainstalované',counts.not_installed]]) {
+        const span = document.createElement('span'); span.textContent = `${label}: `;
+        const strong = document.createElement('strong'); strong.textContent = value; span.append(strong); $('stats').append(span);
+      }
+      const categories = Array.from(new Set(next.items.map(item=>item.category))).sort((a,b)=>a.localeCompare(b,'cs'));
+      const previousCategory = $('category').value;
+      $('category').replaceChildren(new Option('Všechny kategorie',''));
+      for (const category of categories) $('category').add(new Option(category,category));
+      $('category').value = categories.includes(previousCategory) ? previousCategory : '';
+      renderItems();
+      $('logs').textContent = next.logs.join('\n');
+      $('logs').scrollTop = $('logs').scrollHeight;
+      const running = next.update_state === 'running';
+      $('update').disabled = running || loading || next.refresh_state !== 'ready';
+      $('cancel').disabled = !running;
+      $('refresh').disabled = loading || running;
+      for (const id of ['path','autodetect','save','backup','auto-kill','launch']) $(id).disabled = running;
+      $('update-status').textContent = running ? 'Probíhá' : next.update_state === 'error' ? 'Chyba' : next.update_state === 'cancelled' ? 'Zrušeno' : next.update_state === 'done' ? 'Dokončeno' : 'Připraveno';
+      $('progress').value = next.progress.overall_ratio || 0;
+      const p = next.progress;
+      $('progress-label').textContent = p.filename
+        ? `${p.item_index}/${p.item_count} · ${p.filename} · ${formatBytes(p.downloaded)} / ${formatBytes(p.total)} · ${Math.round((p.ratio || 0)*100)} % · ${p.speed || ''}`
+        : next.update_summary || next.update_error || statusText[next.refresh_state] || 'Čekám na aktualizaci.';
+      $('selection-summary').textContent = `${next.items.filter(item=>item.selected).length} vybraných z ${next.items.length} balíčků`;
+    }
+    function renderItems() {
+      if (!state) return;
+      const query = $('search').value.trim().toLocaleLowerCase('cs');
+      const category = $('category').value;
+      const status = $('status-filter').value;
+      const filtered = state.items.filter(item => {
+        const searchable = `${item.filename} ${item.title} ${item.description} ${item.category}`.toLocaleLowerCase('cs');
+        return (!query || searchable.includes(query)) && (!category || item.category === category) && (!status || item.status === status);
+      });
+      const tbody = $('items');
+      tbody.replaceChildren();
+      if (!filtered.length) {
+        const row = tbody.insertRow(); const cell = row.insertCell(); cell.colSpan = 6; cell.textContent = state.items.length ? 'Žádné balíčky neodpovídají filtru.' : 'Zatím nejsou načtené žádné balíčky.';
+        return;
+      }
+      for (const item of filtered) {
+        const row = tbody.insertRow();
+        const checkCell = row.insertCell();
+        const checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.value=item.filename; checkbox.checked=item.selected; checkbox.setAttribute('aria-label',`Vybrat ${item.filename}`);
+        checkbox.addEventListener('change', () => {
+          clearTimeout(selectionTimer);
+          selectionTimer = setTimeout(() => updateSelection().catch(error=>announce(error.message,true)), 120);
+        });
+        checkCell.append(checkbox);
+        const statusCell = row.insertCell(); statusCell.className=`status ${item.status}`; statusCell.textContent=item.status_label;
+        const titleCell = row.insertCell(); titleCell.className='title';
+        const strong=document.createElement('strong'); strong.textContent=item.filename; titleCell.append(strong);
+        const title=document.createElement('div'); title.textContent=item.title; titleCell.append(title);
+        const categoryCell=row.insertCell(); categoryCell.textContent=item.category;
+        const dateCell=row.insertCell(); dateCell.className='small'; dateCell.textContent=item.date || '—';
+        const sizeCell=row.insertCell(); sizeCell.className='small'; sizeCell.textContent=item.size || '—';
+      }
+    }
+    $('save').addEventListener('click',()=>saveSettings().catch(error=>announce(error.message,true)));
+    $('autodetect').addEventListener('click',async()=>{ try { const result=await request('/api/autodetect',{}); settingsDirty=false; render(result.state); announce('Instalace IDOS byla nalezena.'); } catch(error) { announce(error.message,true); } });
+    $('refresh').addEventListener('click',async()=>{ try { await saveSettings(); await request('/api/refresh',{}); await poll(); } catch(error) { announce(error.message,true); } });
+    $('update').addEventListener('click',async()=>{ try { await saveSettings(); await request('/api/update',{}); await poll(); } catch(error) { announce(error.message,true); } });
+    $('cancel').addEventListener('click',async()=>{ try { await request('/api/cancel',{}); await poll(); } catch(error) { announce(error.message,true); } });
+    $('launch-now').addEventListener('click',async()=>{ try { await saveSettings(); const result=await request('/api/launch',{}); render(result.state); announce(result.message); } catch(error) { announce(error.message,true); } });
+    document.querySelectorAll('[data-action]').forEach(button=>button.addEventListener('click',()=>selectAction(button.dataset.action).catch(error=>announce(error.message,true))));
+    for (const id of ['path','backup','auto-kill','launch']) $(id).addEventListener('input',()=>{ settingsDirty=true; });
+    for (const id of ['backup','auto-kill','launch']) $(id).addEventListener('change',()=>{ settingsDirty=true; });
+    for (const id of ['search','category','status-filter']) $(id).addEventListener(id==='search'?'input':'change',renderItems);
+    async function poll() {
+      try { const current=await request('/api/state'); render(current); }
+      catch(error) { announce(error.message,true); }
+    }
+    poll();
+    setInterval(poll,1200);
+  </script>
+</body>
+</html>

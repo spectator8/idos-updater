@@ -19,6 +19,11 @@ Kompletní a spolehlivá aplikace v Pythonu pro automatickou aktualizaci program
   - Sledování rychlosti stahování, přenesené velikosti a procentuálního průběhu v reálném čase.
   - Tlačítko **▶ Spustit IDOS** přímo z aplikace.
 
+- **🌐 Lokální webové rozhraní:**
+  - Spuštění v prohlížeči jako alternativa k desktopovému GUI.
+  - Filtrování balíčků, jejich stavů a kategorií, výběr presetů a aktualizace s průběhem a protokolem.
+  - Server naslouchá výhradně na tomto počítači (`127.0.0.1`) a nevyžaduje externí Python balíčky.
+
 - **⚙️ Konzolový režim (CLI) pro automatizaci a Plánovač úloh:**
   - Podpora pro bezobslužný běh (`--non-interactive`, `--preset quick`, `--launch`, atd.).
   - Možnost snadné integrace do Plánovače úloh systému Windows (Task Scheduler) pro pravidelné týdenní aktualizace.
@@ -41,7 +46,18 @@ Stačí dvakrát kliknout na **`run_gui.bat`** nebo spustit přes terminál:
 python main.py
 ```
 
-### 2. Spuštění přes příkazovou řádku (CLI)
+### 2. Spuštění webového rozhraní
+
+Spusťte **`run_web.bat`** nebo z terminálu:
+
+```bash
+python main.py --web
+```
+
+Pro výběr jiné cílové složky lze použít `python main.py --web --path "C:\IDOS"`.
+Webový server zůstává spuštěný v konzoli; ukončíte jej pomocí `Ctrl+C`.
+
+### 3. Spuštění přes příkazovou řádku (CLI)
 
 #### Výpis a vyhledávání:
 ```bash
@@ -82,10 +98,13 @@ idos-updater/
 │   ├── __main__.py      # Spouštěcí bod balíčku
 │   ├── core.py          # Logika stahování, parsování CHAPS, extrakce, zálohování
 │   ├── cli.py           # Plnohodnotné CLI rozhraní s argumenty
-│   └── gui.py           # Grafické okenní rozhraní v Tkinter
+│   ├── gui.py           # Grafické okenní rozhraní v Tkinter
+│   ├── web.py           # Lokální webové rozhraní a HTTP server
+│   └── web_ui.html      # Uživatelské rozhraní pro prohlížeč
 │
 ├── main.py              # Hlavní spouštěč (GUI nebo CLI dle argumentů)
 ├── run_gui.bat          # Spouštěč GUI pro Windows (dvojklik)
+├── run_web.bat          # Spouštěč webového rozhraní pro Windows
 ├── update_quick.bat     # Spouštěč rychlé aktualizace pro Windows (dvojklik)
 ├── test_updater.py      # Integrační a unit testy
 ├── requirements.txt     # Informace o závislostech
