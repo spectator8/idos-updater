@@ -343,7 +343,7 @@ class IdosUpdaterGUI(tk.Tk):
                 items = scraper.fetch_updates()
                 self.after(0, lambda: self._on_updates_fetched(items))
             except Exception as e:
-                self.after(0, lambda: self._on_fetch_error(str(e)))
+                self.after(0, lambda e=e: self._on_fetch_error(str(e)))
 
         threading.Thread(target=worker, daemon=True).start()
 
