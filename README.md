@@ -10,6 +10,8 @@ Kompletní a spolehlivá aplikace v Pythonu pro automatickou aktualizaci program
   - Přehledná tabulka všech 220+ balíčků rozdělených podle kategorií (Programové vybavení, Jízdní řády - Vlaky, Autobusy, MHD města, Tarifní soubory, Mapy, Doplňkové info).
   - Rychlé filtrování a fulltextové vyhledávání (např. *Brno*, *PID*, *Ostrava*, *Vlaky*).
   - Přednastavené rychlé sady (Presety):
+    - ⚡ **Označit vyžadující aktualizaci** – automaticky vybere pouze balíčky s novou verzí na webu CHAPS
+    - ⚪ **Označit nenainstalované** – vybere všechny balíčky, které v cílové složce dosud chybí
     - ⚡ **Rychlá aktualizace** (Program `TTAKT` + písmo `TTFONT` + Vlaky ČR/Evropa + Autobusy ČR/SR)
     - 📦 **Kompletní aktualizace** (Program + archiv `KOMPLET.ZIP`)
     - 🚆 **Pouze Vlaky a Autobusy**
