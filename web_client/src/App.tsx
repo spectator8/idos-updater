@@ -651,7 +651,7 @@ export default function App() {
         </section>
 
         <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.8fr)]">
-          <Card>
+          <Card className="min-w-0">
             <CardHeader className="flex-row items-start justify-between gap-4 border-b pb-4">
               <div className="space-y-1">
                 <CardTitle className="text-base">Dostupné balíčky</CardTitle>
@@ -669,7 +669,7 @@ export default function App() {
                 Obnovit
               </Button>
             </CardHeader>
-            <CardContent className="space-y-4 pt-4">
+            <CardContent className="min-w-0 space-y-4 pt-4">
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px_190px]">
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -751,7 +751,7 @@ export default function App() {
               </div>
 
               <div className="overflow-hidden rounded-xl border">
-                <div className="max-h-[540px] overflow-auto">
+                <div className="min-w-0 max-h-[540px] overflow-x-auto overflow-y-auto">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/90 text-xs text-muted-foreground backdrop-blur">
                       <tr>
