@@ -157,7 +157,14 @@ function StatusBadge({ item }: { item: PackageItem }) {
       : item.status === "up_to_date"
         ? "success"
         : "secondary"
-  return <Badge variant={variant}>{item.status_label}</Badge>
+  return (
+    <Badge
+      className="h-auto max-w-full whitespace-normal break-words text-center leading-tight"
+      variant={variant}
+    >
+      {item.status_label}
+    </Badge>
+  )
 }
 
 function SortableHeader({
@@ -196,12 +203,12 @@ function SortableHeader({
         variant="ghost"
         size="sm"
         className={cn(
-          "-mx-2 h-7 text-xs text-muted-foreground hover:text-foreground",
+          "h-auto min-h-7 w-full min-w-0 flex-wrap whitespace-normal px-1 text-xs text-muted-foreground hover:text-foreground",
           alignRight && "flex-row-reverse",
         )}
         onClick={() => onSort(column)}
       >
-        {label}
+        <span className="min-w-0 break-words">{label}</span>
         {Icon ? <Icon className="size-3.5" /> : <span className="size-3.5" aria-hidden />}
       </Button>
     </th>
@@ -751,8 +758,8 @@ export default function App() {
               </div>
 
               <div className="overflow-hidden rounded-xl border">
-                <div className="min-w-0 overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
+                <div className="min-w-0 max-h-[min(540px,60vh)] overflow-x-hidden overflow-y-auto">
+                  <table className="w-full table-fixed text-left text-sm">
                     <thead className="bg-muted/90 text-xs text-muted-foreground">
                       <tr>
                         <th className="w-10 px-3 py-2.5 font-medium">
@@ -781,24 +788,26 @@ export default function App() {
                               aria-label={`Vybrat ${item.filename}`}
                             />
                           </td>
-                          <td className="max-w-[280px] px-3 py-3">
+                          <td className="min-w-0 px-2 py-3 sm:px-3">
                             <div className="truncate font-medium" title={item.title}>
                               {item.title || item.filename}
                             </div>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="font-mono">{item.filename}</span>
+                            <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                              <span className="min-w-0 truncate font-mono" title={item.filename}>
+                                {item.filename}
+                              </span>
                             </div>
                           </td>
-                          <td className="max-w-[220px] truncate px-3 py-3 text-xs text-muted-foreground" title={item.category}>
+                          <td className="truncate px-2 py-3 text-xs text-muted-foreground sm:px-3" title={item.category}>
                             {item.category || "—"}
                           </td>
-                          <td className="px-3 py-3">
+                          <td className="min-w-0 px-2 py-3 sm:px-3">
                             <StatusBadge item={item} />
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                          <td className="break-words px-2 py-3 text-xs text-muted-foreground sm:px-3">
                             {item.date || "—"}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-right text-xs text-muted-foreground">
+                          <td className="break-words px-2 py-3 text-right text-xs text-muted-foreground sm:px-3">
                             {item.size || "—"}
                           </td>
                         </tr>
