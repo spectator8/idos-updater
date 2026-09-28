@@ -78,11 +78,17 @@ class WebInterfaceTests(unittest.TestCase):
         return status, result
 
     def test_state_endpoint_returns_local_package_data(self):
-        status, body = self.request("GET", "/api/state")
+        with patch(
+            "idos_updater.web.IdosEnvironment.get_item_update_status",
+            return_value=("outdated", "Vyžaduje aktualizaci", "2.1.2025"),
+        ):
+            status, body = self.request("GET", "/api/state")
         result = json.loads(body)
         self.assertEqual(status, 200)
         self.assertEqual(result["items"][0]["filename"], "TTAKT.ZIP")
-        self.assertTrue(result["items"][0]["selected"])
+        self.assertFalse(result["items"][0]["selected"])
+        self.assertEqual(result["items"][0]["date"], "1.1.2026")
+        self.assertEqual(result["items"][0]["local_date"], "2.1.2025")
 
     def test_homepage_serves_csrf_token_and_ui(self):
         status, body = self.request("GET", "/")
@@ -181,6 +187,7 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("během aktualizace", json.loads(body)["error"])
 
     def test_update_endpoint_runs_selected_packages(self):
+        self.app.set_selection(["TTAKT.ZIP"])
         headers = {
             "X-IDO-CSRF-Token": self.token,
             "Origin": "http://127.0.0.1:{}".format(self.port),
