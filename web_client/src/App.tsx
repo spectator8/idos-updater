@@ -751,7 +751,7 @@ export default function App() {
               </div>
 
               <div className="overflow-hidden rounded-xl border">
-                <div className="min-w-0 max-h-[540px] overflow-x-auto overflow-y-auto">
+                <div className="min-w-0 max-h-[min(540px,60vh)] overflow-x-auto overflow-y-auto">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-muted/90 text-xs text-muted-foreground backdrop-blur">
                       <tr>
