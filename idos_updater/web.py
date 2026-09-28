@@ -86,18 +86,6 @@ class WebApplication:
                         name for name in self.selected_filenames
                         if name.upper() in {item.filename.upper() for item in items}
                     }
-                    if not self.selected_filenames:
-                        outdated = [
-                            item.filename for item in items
-                            if IdosEnvironment.get_item_update_status(item, self.scan_result)[0] == "outdated"
-                        ]
-                        if outdated:
-                            self.selected_filenames = set(outdated)
-                        else:
-                            self.selected_filenames = {
-                                item.filename for item in items
-                                if PRESETS["quick"]["filter"](item)
-                            }
                 self._append_log("Načteno {} balíčků z CHAPS.".format(len(items)))
             except Exception as exc:
                 with self.lock:
