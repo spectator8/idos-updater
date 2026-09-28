@@ -805,14 +805,7 @@ export default function App() {
                             <StatusBadge item={item} />
                           </td>
                           <td className="break-words px-2 py-3 text-xs text-muted-foreground sm:px-3">
-                            <div>
-                              <span className="font-medium text-foreground">Web</span>{" "}
-                              {item.date || "—"}
-                            </div>
-                            <div className="mt-1">
-                              <span className="font-medium text-foreground">Lokálně</span>{" "}
-                              {item.local_date || "—"}
-                            </div>
+                            {item.date || "—"}
                           </td>
                           <td className="break-words px-2 py-3 text-right text-xs text-muted-foreground sm:px-3">
                             {item.size || "—"}
